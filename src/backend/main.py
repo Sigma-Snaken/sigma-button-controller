@@ -69,11 +69,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-from routers import robots, buttons, bindings, logs, ws  # noqa: E402
+from routers import robots, buttons, bindings, logs, ws, monitor  # noqa: E402
 app.include_router(robots.router, prefix="/api")
 app.include_router(buttons.router, prefix="/api")
 app.include_router(bindings.router, prefix="/api")
 app.include_router(logs.router, prefix="/api")
+app.include_router(monitor.router, prefix="/api")
 app.include_router(ws.router)
 
 

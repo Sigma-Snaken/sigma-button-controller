@@ -3,6 +3,7 @@ import { initRobots } from './robots.js';
 import { initButtons } from './buttons.js';
 import { initBindings } from './bindings.js';
 import { initLogs } from './logs.js';
+import { initMonitor } from './monitor.js';
 
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -35,3 +36,4 @@ initRobots();
 initButtons(ws);
 initBindings();
 initLogs(ws);
+initMonitor();

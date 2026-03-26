@@ -27,4 +27,8 @@ export const api = {
     getBindings: (buttonId) => request('GET', `/bindings/${buttonId}`),
     updateBindings: (buttonId, data) => request('PUT', `/bindings/${buttonId}`, data),
     getLogs: (page = 1) => request('GET', `/logs?page=${page}`),
+
+    // Monitor
+    getMap: (id) => request('GET', `/robots/${id}/map`),
+    getCamera: (id, camera) => request('GET', `/robots/${id}/camera/${camera}`),
 };

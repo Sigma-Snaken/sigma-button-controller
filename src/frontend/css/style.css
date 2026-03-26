@@ -398,6 +398,40 @@ tr:hover td {
     margin-top: 1rem;
 }
 
+/* ── Monitor ── */
+.monitor-section {
+    margin-bottom: 1rem;
+}
+
+.monitor-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.monitor-label {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--amber-dim);
+}
+
+.monitor-cameras {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+@media (max-width: 640px) {
+    .monitor-cameras {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--panel-dark); }
