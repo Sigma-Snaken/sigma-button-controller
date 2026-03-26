@@ -71,5 +71,5 @@ fi
 echo ""
 echo "=== Setup complete ==="
 echo "Next steps:"
-echo "  1. Verify Zigbee dongle: ls /dev/ttyACM* /dev/ttyUSB*"
+echo "  1. Verify Zigbee dongle: ls -la /dev/zigbee"
 echo "  2. cd $APP_DIR && docker compose pull && docker compose up -d"
