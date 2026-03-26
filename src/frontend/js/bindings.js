@@ -55,7 +55,8 @@ async function loadBindings(buttonId,robots) {
                     const cs=b&&b.action===action?b.params.shelf:'';
                     paramsDiv.innerHTML=`<div class="form-group"><label>貨架</label><select class="param-shelf"><option value="">-- 選擇貨架 --</option>${shelves.map(s=>`<option value="${s.name}" ${s.name===cs?'selected':''}>${s.name}</option>`).join('')}</select></div>`;
                 }else if(action==='start_shortcut'){
-                    const d=await api.getShortcuts(robotId);const scs=d.shortcuts||[];
+                    const d=await api.getShortcuts(robotId);const raw=d.shortcuts||{};
+                    const scs=Array.isArray(raw)?raw:Object.entries(raw).map(([id,name])=>({id,name}));
                     const cur=b&&b.action===action?b.params.shortcut_id:'';
                     paramsDiv.innerHTML=`<div class="form-group"><label>捷徑</label><select class="param-shortcut_id"><option value="">-- 選擇捷徑 --</option>${scs.map(s=>`<option value="${s.id}" ${s.id===cur?'selected':''}>${s.name||s.id}</option>`).join('')}</select></div>`;
                 }
