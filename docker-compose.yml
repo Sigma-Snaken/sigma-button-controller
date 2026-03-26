@@ -1,0 +1,36 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    restart: unless-stopped
+
+  zigbee2mqtt:
+    image: koenkk/zigbee2mqtt
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./zigbee2mqtt:/app/data
+    devices:
+      - ${ZIGBEE_DEVICE:-/dev/ttyACM0}:/dev/ttyACM0
+    environment:
+      - TZ=Asia/Taipei
+    depends_on:
+      - mosquitto
+    restart: unless-stopped
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
+      - TZ=Asia/Taipei
+    depends_on:
+      - mosquitto
+    restart: unless-stopped

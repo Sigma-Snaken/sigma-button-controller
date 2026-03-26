@@ -1,0 +1,13 @@
+mqtt:
+  base_topic: zigbee2mqtt
+  server: mqtt://mosquitto
+serial:
+  port: /dev/ttyACM0
+frontend:
+  port: 8080
+advanced:
+  log_level: info
+  homeassistant_legacy_entity_attributes: false
+  legacy_api: false
+  legacy_availability_payload: false
+permit_join: false
