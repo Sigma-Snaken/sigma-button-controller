@@ -196,9 +196,9 @@ sequenceDiagram
 ### 生產部署 (Raspberry Pi)
 
 ```bash
-# 1. 下載部署腳本
-git clone https://github.com/Sigma-Snaken/pi-zigbee.git
-cd pi-zigbee/deploy
+# 1. 下載部署檔案
+curl -L https://github.com/Sigma-Snaken/pi-zigbee/archive/refs/heads/main.tar.gz | tar xz --strip=2 pi-zigbee-main/deploy
+cd deploy
 
 # 2. 執行首次設定 (安裝 Docker、udev rule、建立目錄、桌面捷徑)
 chmod +x setup.sh && ./setup.sh
@@ -206,7 +206,7 @@ chmod +x setup.sh && ./setup.sh
 # 3. 確認 Zigbee dongle 已被辨識
 ls -la /dev/zigbee
 
-# 4. 啟動
+# 4. 啟動 (從 GHCR pull image，不需本地 build)
 cd /opt/app/pi-zigbee
 docker compose pull && docker compose up -d
 ```
