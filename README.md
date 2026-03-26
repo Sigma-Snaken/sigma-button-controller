@@ -39,7 +39,7 @@ graph LR
         K1["Kachaka Robot 1<br/>:26400 gRPC"]
         K2["Kachaka Robot N<br/>:26400 gRPC"]
     end
-    Dongle["SONOFF Zigbee 3.0<br/>USB Dongle<br/>/dev/ttyACM0"] -->|USB| Pi
+    Dongle["SONOFF Zigbee 3.0<br/>USB Dongle<br/>/dev/zigbee"] -->|USB| Pi
     BTN1["SNZB-01 按鈕"] -.->|Zigbee 3.0| Dongle
     BTN2["SNZB-01 按鈕"] -.->|Zigbee 3.0| Dongle
     Pi -->|"gRPC :26400"| K1
@@ -200,17 +200,39 @@ sequenceDiagram
 git clone https://github.com/Sigma-Snaken/pi-zigbee.git
 cd pi-zigbee/deploy
 
-# 2. 執行首次設定 (安裝 Docker、建立目錄、桌面捷徑)
+# 2. 執行首次設定 (安裝 Docker、udev rule、建立目錄、桌面捷徑)
 chmod +x setup.sh && ./setup.sh
 
-# 3. 確認 Zigbee dongle 路徑
-ls /dev/ttyACM* /dev/ttyUSB*
-# 如果路徑不是 /dev/ttyACM0，編輯 /opt/app/pi-zigbee/.env
+# 3. 確認 Zigbee dongle 已被辨識
+ls -la /dev/zigbee
 
 # 4. 啟動
 cd /opt/app/pi-zigbee
 docker compose pull && docker compose up -d
 ```
+
+> **⚠️ Zigbee Dongle 注意事項**
+>
+> `setup.sh` 會自動建立 udev rule，將 Zigbee dongle 固定為 `/dev/zigbee`（不受 USB 插拔、換 port 影響）。
+>
+> **預設規則針對 SONOFF Zigbee 3.0 USB Dongle Plus**（USB ID `10c4:ea60`, Silicon Labs CP2102）。
+>
+> **如果你使用不同廠牌的 Zigbee dongle**，需要手動修改 udev rule：
+>
+> ```bash
+> # 1. 查詢你的 dongle USB ID
+> udevadm info -a -n /dev/ttyUSB0 | grep -E 'idVendor|idProduct'
+>
+> # 2. 修改 udev rule（替換 idVendor 和 idProduct）
+> sudo nano /etc/udev/rules.d/99-zigbee.rules
+> # SUBSYSTEM=="tty", ATTRS{idVendor}=="你的值", ATTRS{idProduct}=="你的值", SYMLINK+="zigbee"
+>
+> # 3. 重新載入
+> sudo udevadm control --reload-rules && sudo udevadm trigger
+>
+> # 4. 確認
+> ls -la /dev/zigbee
+> ```
 
 ### 開發環境
 
@@ -236,7 +258,7 @@ docker compose up --build
 |------|--------|------|
 | `MQTT_HOST` | `mosquitto` | MQTT broker 位址 |
 | `MQTT_PORT` | `1883` | MQTT broker 連接埠 |
-| `ZIGBEE_DEVICE` | `/dev/ttyACM0` | Zigbee USB dongle 裝置路徑 |
+| `ZIGBEE_DEVICE` | `/dev/zigbee` | Zigbee USB dongle 裝置路徑 (udev symlink) |
 | `TZ` | `Asia/Taipei` | 時區 |
 
 ## 專案結構
