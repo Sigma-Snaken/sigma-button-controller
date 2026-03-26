@@ -5,12 +5,55 @@ import { initBindings } from './bindings.js';
 import { initLogs } from './logs.js';
 import { initMonitor } from './monitor.js';
 
+const TAB_LABELS = {
+    robots: '機器人',
+    buttons: '按鈕',
+    bindings: '綁定設定',
+    logs: '執行記錄',
+    monitor: '機器人監控',
+};
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    const tab = document.querySelector(`.tab[data-tab="${tabId}"]`);
+    if (tab) tab.classList.add('active');
+    document.getElementById(tabId)?.classList.add('active');
+    // Update FAB panel active state
+    document.querySelectorAll('.fab-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.tab === tabId);
+    });
+}
+
+// Desktop tabs
 document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById(tab.dataset.tab).classList.add('active');
+    tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+});
+
+// FAB menu (mobile)
+const fabBtn = document.getElementById('fab-menu');
+const fabPanel = document.getElementById('fab-panel');
+const fabOverlay = document.getElementById('fab-overlay');
+
+// Populate FAB panel
+fabPanel.innerHTML = Object.entries(TAB_LABELS).map(([id, label]) =>
+    `<button class="fab-item ${id === 'robots' ? 'active' : ''}" data-tab="${id}">${label}</button>`
+).join('');
+
+function toggleFab() {
+    const isOpen = !fabPanel.classList.contains('hidden');
+    fabPanel.classList.toggle('hidden', isOpen);
+    fabOverlay.classList.toggle('hidden', isOpen);
+    fabBtn.textContent = isOpen ? '\u2630' : '\u2715';
+}
+
+fabBtn.addEventListener('click', toggleFab);
+fabOverlay.addEventListener('click', toggleFab);
+
+fabPanel.querySelectorAll('.fab-item').forEach(item => {
+    item.addEventListener('click', () => {
+        switchTab(item.dataset.tab);
+        toggleFab();
     });
 });
 

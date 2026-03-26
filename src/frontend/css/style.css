@@ -432,8 +432,106 @@ tr:hover td {
     -webkit-overflow-scrolling: touch;
 }
 
+/* ── FAB Menu (mobile only) ── */
+.fab-menu {
+    display: none;
+    position: fixed;
+    bottom: 1.5rem;
+    left: 1.5rem;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1px solid var(--amber);
+    background: linear-gradient(180deg, var(--amber-dim) 0%, var(--amber-muted) 100%);
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 200;
+    box-shadow: 0 2px 12px rgba(184, 134, 11, 0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+    line-height: 1;
+}
+
+.fab-menu:active {
+    transform: scale(0.92);
+}
+
+.fab-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 190;
+    opacity: 1;
+    transition: opacity 0.2s;
+}
+
+.fab-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.fab-panel {
+    position: fixed;
+    bottom: 5rem;
+    left: 1.5rem;
+    background: var(--panel-light);
+    border: 1px solid var(--border-medium);
+    border-radius: 8px;
+    padding: 0.5rem;
+    z-index: 210;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+    transform: translateY(0);
+    opacity: 1;
+    transition: transform 0.2s, opacity 0.2s;
+    min-width: 160px;
+}
+
+.fab-panel.hidden {
+    transform: translateY(10px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.fab-panel .fab-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: var(--text-primary);
+    padding: 0.6rem 0.75rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+
+.fab-panel .fab-item:hover,
+.fab-panel .fab-item.active {
+    background: var(--amber-subtle);
+    color: var(--amber);
+}
+
+.fab-panel .fab-item.active {
+    font-weight: 700;
+    color: var(--amber);
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
+    .fab-menu {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    nav#tabs {
+        display: none;
+    }
+
     header {
         padding: 0.5rem 0.75rem;
     }
@@ -447,23 +545,6 @@ tr:hover td {
         font-size: 11px;
         letter-spacing: 1.5px;
         margin-right: 0;
-    }
-
-    nav#tabs {
-        width: 100%;
-        margin-left: 0;
-        margin-top: 0.5rem;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        flex-wrap: nowrap;
-    }
-
-    .tab {
-        font-size: 10px;
-        letter-spacing: 1px;
-        padding: 0.5rem 0.75rem;
-        white-space: nowrap;
-        flex-shrink: 0;
     }
 
     main {
@@ -520,7 +601,13 @@ tr:hover td {
     .form-group input,
     .form-group select {
         padding: 8px 10px;
-        font-size: 14px; /* prevent iOS zoom on focus */
+        font-size: 14px;
+    }
+
+    .toast {
+        bottom: 5rem;
+        left: 1rem;
+        right: 1rem;
     }
 }
 
@@ -528,12 +615,6 @@ tr:hover td {
     header h1 {
         font-size: 10px;
         letter-spacing: 1px;
-    }
-
-    .tab {
-        font-size: 9px;
-        padding: 0.4rem 0.6rem;
-        letter-spacing: 0.5px;
     }
 
     .card-header h2 {
