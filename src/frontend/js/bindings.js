@@ -68,17 +68,36 @@ async function loadBindings(buttonId,robots) {
 
 async function saveBindings(buttonId) {
     const payload={};
+    let valid = true;
     container.querySelectorAll('.trigger-slot').forEach(slot=>{
+        if(!valid) return;
         const trigger=slot.dataset.trigger,robotId=slot.querySelector('.bind-robot').value,action=slot.querySelector('.bind-action').value;
         if(!robotId||!action){payload[trigger]=null;return;}
         let params={};const pd=slot.querySelector('.bind-params');
-        if(action==='move_to_location')params={name:pd.querySelector('.param-name')?.value||''};
-        else if(action==='speak')params={text:pd.querySelector('.param-text')?.value||''};
-        else if(action==='move_shelf')params={shelf:pd.querySelector('.param-shelf')?.value||'',location:pd.querySelector('.param-location')?.value||''};
-        else if(action==='return_shelf')params={shelf:pd.querySelector('.param-shelf')?.value||''};
-        else if(action==='start_shortcut')params={shortcut_id:pd.querySelector('.param-shortcut_id')?.value||''};
-        if(!Object.values(params).some(v=>v)){payload[trigger]=null;return;}
+        if(action==='move_to_location'){
+            const v=pd.querySelector('.param-name')?.value;
+            if(!v){showToast(`${TRIGGER_LABELS[trigger]}: 請選擇位置`,'error');valid=false;return;}
+            params={name:v};
+        } else if(action==='speak'){
+            const v=pd.querySelector('.param-text')?.value;
+            if(!v){showToast(`${TRIGGER_LABELS[trigger]}: 請輸入語音內容`,'error');valid=false;return;}
+            params={text:v};
+        } else if(action==='move_shelf'){
+            const s=pd.querySelector('.param-shelf')?.value, l=pd.querySelector('.param-location')?.value;
+            if(!s||!l){showToast(`${TRIGGER_LABELS[trigger]}: 請選擇貨架和位置`,'error');valid=false;return;}
+            params={shelf:s,location:l};
+        } else if(action==='return_shelf'){
+            const s=pd.querySelector('.param-shelf')?.value;
+            if(!s){showToast(`${TRIGGER_LABELS[trigger]}: 請選擇貨架`,'error');valid=false;return;}
+            params={shelf:s};
+        } else if(action==='start_shortcut'){
+            const v=pd.querySelector('.param-shortcut_id')?.value;
+            if(!v){showToast(`${TRIGGER_LABELS[trigger]}: 請選擇捷徑`,'error');valid=false;return;}
+            params={shortcut_id:v};
+        }
+        // return_home, dock_shelf, undock_shelf: params stays {}
         payload[trigger]={robot_id:robotId,action,params};
     });
+    if(!valid) return;
     try{await api.updateBindings(buttonId,payload);showToast('設定已儲存');}catch(e){showToast(e.message,'error');}
 }
