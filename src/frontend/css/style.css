@@ -609,6 +609,10 @@ tr:hover td {
         grid-template-columns: 1fr;
     }
 
+    #metrics-panel {
+        grid-template-columns: 1fr !important;
+    }
+
     #map-canvas {
         max-width: 100% !important;
         height: auto !important;

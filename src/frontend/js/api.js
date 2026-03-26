@@ -30,7 +30,11 @@ export const api = {
 
     // Monitor
     getMap: (id) => request('GET', `/robots/${id}/map`),
-    getCamera: (id, camera) => request('GET', `/robots/${id}/camera/${camera}`),
+    getCamera: (id, camera, detect = false) => request('GET', `/robots/${id}/camera/${camera}${detect ? '?detect=true' : ''}`),
+    startStreamer: (id, camera, detect = false) => request('POST', `/robots/${id}/streamer/${camera}${detect ? '?detect=true' : ''}`),
+    stopStreamer: (id, camera) => request('DELETE', `/robots/${id}/streamer/${camera}`),
+    getDetections: (id) => request('GET', `/robots/${id}/detections`),
+    getMetrics: (id) => request('GET', `/robots/${id}/metrics`),
 
     // System
     getSystemInfo: () => request('GET', '/system/info'),
