@@ -56,10 +56,10 @@ body {
 
 /* ── Header / Command Bar ── */
 header {
-    height: 60px;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    padding: 0 1.5rem;
+    padding: 0.5rem 1.5rem;
     background: var(--panel-dark);
     border-bottom: 1px solid var(--border-medium);
     box-shadow: 0 1px 0 var(--border-active);
@@ -426,9 +426,128 @@ tr:hover td {
     margin-top: 1rem;
 }
 
-@media (max-width: 640px) {
+/* ── Table Scroll Wrapper ── */
+.table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    header {
+        padding: 0.5rem 0.75rem;
+    }
+
+    .header-logo {
+        height: 28px;
+        margin-right: 0.5rem;
+    }
+
+    header h1 {
+        font-size: 11px;
+        letter-spacing: 1.5px;
+        margin-right: 0;
+    }
+
+    nav#tabs {
+        width: 100%;
+        margin-left: 0;
+        margin-top: 0.5rem;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+    }
+
+    .tab {
+        font-size: 10px;
+        letter-spacing: 1px;
+        padding: 0.5rem 0.75rem;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    main {
+        padding: 0.75rem;
+    }
+
+    .card {
+        padding: 0.75rem;
+    }
+
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    table {
+        font-size: 11px;
+    }
+
+    th, td {
+        padding: 4px 6px;
+    }
+
+    .trigger-grid {
+        grid-template-columns: 1fr;
+    }
+
     .monitor-cameras {
         grid-template-columns: 1fr;
+    }
+
+    #map-canvas {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+
+    .modal {
+        width: 95%;
+        max-width: none;
+        padding: 1rem;
+    }
+
+    .btn {
+        font-size: 9px;
+        padding: 0.4rem 0.75rem;
+    }
+
+    .btn-sm {
+        padding: 0.2rem 0.4rem;
+        font-size: 8px;
+    }
+
+    .form-group input,
+    .form-group select {
+        padding: 8px 10px;
+        font-size: 14px; /* prevent iOS zoom on focus */
+    }
+}
+
+@media (max-width: 480px) {
+    header h1 {
+        font-size: 10px;
+        letter-spacing: 1px;
+    }
+
+    .tab {
+        font-size: 9px;
+        padding: 0.4rem 0.6rem;
+        letter-spacing: 0.5px;
+    }
+
+    .card-header h2 {
+        font-size: 10px;
+    }
+
+    table {
+        font-size: 10px;
+    }
+
+    .monitor-section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.3rem;
     }
 }
 

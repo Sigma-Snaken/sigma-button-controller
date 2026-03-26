@@ -98,8 +98,10 @@ function drawMap(map, pose) {
 
     const img = new Image();
     img.onload = () => {
-        // Scale map to fit (max 500px wide)
-        const scale = Math.min(500 / img.width, 400 / img.height, 1);
+        // Scale map to fit container
+        const containerWidth = canvas.parentElement.clientWidth || 500;
+        const maxW = Math.min(containerWidth - 4, 500);
+        const scale = Math.min(maxW / img.width, 400 / img.height, 1);
         canvas.width = img.width * scale;
         canvas.height = img.height * scale;
 
