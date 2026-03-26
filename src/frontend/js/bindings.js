@@ -61,7 +61,7 @@ async function loadBindings(buttonId,robots) {
                 }
             }catch(e){paramsDiv.innerHTML=`<p style="color:var(--danger);font-size:0.8rem">無法取得資料: ${e.message}</p>`;}
         };
-        actionSel.onchange=renderParams;robotSel.onchange=renderParams;renderParams();
+        actionSel.addEventListener('change',renderParams);robotSel.addEventListener('change',renderParams);renderParams();
     });
 }
 
