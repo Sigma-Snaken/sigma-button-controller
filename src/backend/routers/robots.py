@@ -12,7 +12,6 @@ router = APIRouter()
 
 
 class RobotCreate(BaseModel):
-    id: str
     name: str
     ip: str
 
@@ -32,6 +31,7 @@ async def list_robots():
         robot_id, name, ip, enabled, created_at = row
         online = False
         battery = None
+        serial = None
         rm = _state.get("robot_manager")
         if rm:
             svc = rm.get(robot_id)
@@ -43,24 +43,32 @@ async def list_robots():
                         battery = bat.get("percentage")
                 except Exception:
                     pass
+            if svc and svc.conn:
+                try:
+                    ping = svc.conn.ping()
+                    if ping.get("ok"):
+                        serial = ping.get("serial")
+                except Exception:
+                    pass
         result.append({
             "id": robot_id, "name": name, "ip": ip,
             "enabled": bool(enabled), "created_at": created_at,
-            "online": online, "battery": battery,
+            "online": online, "battery": battery, "serial": serial,
         })
     return result
 
 
 @router.post("/robots", status_code=201)
 async def create_robot(body: RobotCreate):
-    if not body.id or not body.id.strip():
-        raise HTTPException(400, "Robot ID is required")
+    if not body.name or not body.name.strip():
+        raise HTTPException(400, "Robot name is required")
+    robot_id = body.name.strip()
     db = _state["db"]
     now = datetime.now(timezone.utc).isoformat()
     try:
         await db.execute(
             "INSERT INTO robots (id, name, ip, enabled, created_at) VALUES (?, ?, ?, 1, ?)",
-            (body.id, body.name, body.ip, now),
+            (robot_id, body.name.strip(), body.ip.strip(), now),
         )
         await db.commit()
     except Exception as e:
@@ -70,11 +78,11 @@ async def create_robot(body: RobotCreate):
     connected = False
     if rm:
         try:
-            rm.add(body.id, body.ip)
+            rm.add(robot_id, body.ip.strip())
             connected = True
         except Exception as e:
             logger.warning(f"Robot added to DB but connection failed: {e}")
-    return {"ok": True, "id": body.id, "connected": connected}
+    return {"ok": True, "id": robot_id, "connected": connected}
 
 
 @router.put("/robots/{robot_id}")
