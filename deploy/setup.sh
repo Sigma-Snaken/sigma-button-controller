@@ -11,10 +11,6 @@ if ! command -v docker &> /dev/null; then
     exit 0
 fi
 
-echo "Configuring Docker daemon..."
-sudo cp daemon.json /etc/docker/daemon.json
-sudo systemctl restart docker
-
 # Create udev rule for Zigbee dongle (fixed /dev/zigbee symlink)
 echo "Setting up Zigbee dongle udev rule..."
 echo 'SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="zigbee"' | sudo tee /etc/udev/rules.d/99-zigbee.rules > /dev/null

@@ -295,7 +295,6 @@ sigma-button-controller/
 │           └── monitor.js           # 地圖 + 鏡頭 + RTT 熱力圖頁面
 ├── deploy/
 │   ├── docker-compose.yml           # 生產用: GHCR image + IPv4 強制
-│   ├── daemon.json                  # Docker daemon IPv4 設定
 │   └── setup.sh                     # 首次部署腳本 + 桌面捷徑
 ├── mosquitto/
 │   └── mosquitto.conf               # Mosquitto broker 設定
