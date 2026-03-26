@@ -302,16 +302,6 @@ sequenceDiagram
 
 ## 部署
 
-### 開發 → 生產流程
-
-```mermaid
-graph LR
-    Dev[本機開發] -->|git push| GH[GitHub main]
-    GH -->|CI trigger| CI[GitHub Actions]
-    CI -->|cross-compile| GHCR[GHCR<br/>amd64 + arm64]
-    GHCR -->|docker compose pull| Pi[Pi 5 Production]
-```
-
 ### 更新生產環境
 
 ```bash
