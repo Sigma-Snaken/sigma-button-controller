@@ -31,28 +31,27 @@ async function renderMonitor() {
             </div>
             <div id="monitor-content">
                 <div id="map-section" class="monitor-section">
-                    <div class="monitor-section-header">
+                    <div class="monitor-section-header" style="justify-content:center">
                         <span class="monitor-label">地圖 / 機器人位置</span>
-                        <div style="display:flex;gap:0.75rem;align-items:center">
-                            <span id="pose-info" style="font-size:11px;color:var(--text-muted)"></span>
-                            <label style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:0.25rem;cursor:pointer">
-                                <input type="checkbox" id="heatmap-toggle"> RTT 熱力圖
-                            </label>
-                            <button class="btn btn-sm btn-danger" id="clear-heatmap" style="display:none">清除資料</button>
-                        </div>
+                        <span id="pose-info" style="font-size:11px;color:var(--text-muted);margin-left:0.75rem"></span>
                     </div>
-                    <div id="map-container" style="position:relative;display:inline-block;background:var(--panel-dark);border:1px solid var(--border-medium);border-radius:4px;overflow:hidden;">
+                    <div id="map-container" style="position:relative;display:flex;justify-content:center;background:var(--panel-dark);border:1px solid var(--border-medium);border-radius:4px;overflow:hidden;">
                         <canvas id="map-canvas"></canvas>
                     </div>
-                    <div id="heatmap-legend" style="display:none;margin-top:0.5rem;font-size:10px;color:var(--text-muted)">
-                        <div style="display:flex;align-items:center;gap:0.5rem">
-                            <span>RTT:</span>
-                            <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#22c55e"></span> &lt;50ms
-                            <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#eab308"></span> 50-100ms
-                            <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#f97316"></span> 100-200ms
-                            <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ef4444"></span> &gt;200ms
+                    <div style="margin-top:0.75rem;font-size:10px;color:var(--text-muted)">
+                        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+                            <div style="display:flex;align-items:center;gap:0.5rem">
+                                <label style="display:flex;align-items:center;gap:0.25rem;cursor:pointer;font-weight:500;color:var(--text-primary)">
+                                    <input type="checkbox" id="heatmap-toggle"> 網路效能圖
+                                </label>
+                                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e"></span>&lt;50ms
+                                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#eab308"></span>50-100ms
+                                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f97316"></span>100-200ms
+                                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444"></span>&gt;200ms
+                            </div>
+                            <button class="btn btn-sm btn-danger" id="clear-heatmap">清除資料</button>
                         </div>
-                        <div id="heatmap-stats" style="margin-top:0.25rem"></div>
+                        <div id="heatmap-stats" style="margin-top:0.25rem">0 筆 | 平均 0ms | 最小 0ms | 最大 0ms</div>
                     </div>
                 </div>
                 <div class="monitor-cameras">
@@ -95,10 +94,14 @@ async function renderMonitor() {
 
     const heatmapToggle = container.querySelector('#heatmap-toggle');
     const clearBtn = container.querySelector('#clear-heatmap');
+
+    // Load stats on init
+    api.getRttHeatmap(sel.value).then(data => {
+        updateHeatmapStats(data.stats);
+    }).catch(() => {});
+
     heatmapToggle.addEventListener('change', async () => {
         showHeatmap = heatmapToggle.checked;
-        document.getElementById('heatmap-legend').style.display = showHeatmap ? 'block' : 'none';
-        clearBtn.style.display = showHeatmap ? 'inline-block' : 'none';
         if (showHeatmap) {
             heatmapData = await api.getRttHeatmap(sel.value);
             updateHeatmapStats(heatmapData.stats);
@@ -107,10 +110,11 @@ async function renderMonitor() {
         }
     });
     clearBtn.addEventListener('click', async () => {
-        if (confirm('確定清除所有 RTT 資料？')) {
+        if (confirm('確定清除所有網路效能資料？')) {
             await api.clearRttHeatmap(sel.value);
             heatmapData = null;
-            showToast('RTT 資料已清除');
+            updateHeatmapStats({ count: 0, avg_rtt_ms: 0, min_rtt_ms: 0, max_rtt_ms: 0 });
+            showToast('網路效能資料已清除');
         }
     });
 
