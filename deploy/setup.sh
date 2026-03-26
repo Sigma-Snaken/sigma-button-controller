@@ -52,6 +52,21 @@ if [ ! -f "$APP_DIR/.env" ]; then
     echo "Created .env from template. Edit $APP_DIR/.env if needed."
 fi
 
+# Create desktop shortcut
+DESKTOP_DIR="$HOME/Desktop"
+if [ -d "$DESKTOP_DIR" ]; then
+    cat > "$DESKTOP_DIR/sigma-controller.desktop" << 'SHORTCUT'
+[Desktop Entry]
+Type=Link
+Name=Sigma 控制介面
+Comment=Zigbee → Kachaka Controller
+Icon=applications-internet
+URL=http://localhost:8000
+SHORTCUT
+    chmod +x "$DESKTOP_DIR/sigma-controller.desktop"
+    echo "Desktop shortcut created."
+fi
+
 echo ""
 echo "=== Setup complete ==="
 echo "Next steps:"
