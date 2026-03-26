@@ -1,0 +1,7 @@
+kachaka-sdk-toolkit
+fastapi
+uvicorn[standard]
+aiosqlite
+aiomqtt
+pytest
+pytest-asyncio
