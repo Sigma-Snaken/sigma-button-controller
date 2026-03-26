@@ -37,8 +37,8 @@ async function renderLogs(page=1) {
                     <input id="notify-bot-token" value="${notifyConfig.bot_token}" placeholder="123456:ABC-DEF...">
                 </div>
                 <div class="form-group">
-                    <label>Chat ID / User ID</label>
-                    <input id="notify-chat-id" value="${notifyConfig.chat_id}" placeholder="123456789">
+                    <label>Chat ID / User ID (多個以逗號分隔)</label>
+                    <input id="notify-chat-id" value="${notifyConfig.chat_id}" placeholder="123456789, 987654321">
                 </div>
             </div>
             <div style="display:flex;gap:0.5rem;align-items:center">

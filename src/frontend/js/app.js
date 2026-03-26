@@ -9,7 +9,7 @@ import { initMonitor } from './monitor.js';
 const TAB_LABELS = {
     robots: '機器人',
     buttons: '按鈕',
-    bindings: '綁定設定',
+    bindings: '動作設定',
     logs: '執行記錄',
     monitor: '機器人監控',
 };
