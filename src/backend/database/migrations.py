@@ -41,6 +41,13 @@ MIGRATIONS = [
         executed_at TEXT NOT NULL
     );
     """,
+    # V2: Settings table for notifications etc.
+    """
+    CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+    """,
 ]
 
 

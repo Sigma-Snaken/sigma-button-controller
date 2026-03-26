@@ -1,3 +1,4 @@
+import { api } from './api.js';
 import { ws } from './websocket.js';
 import { initRobots } from './robots.js';
 import { initButtons } from './buttons.js';
@@ -73,6 +74,12 @@ export function showModal(title, bodyHtml, onConfirm) {
     overlay.querySelector('#modal-confirm').onclick = () => { onConfirm(overlay); overlay.remove(); };
     return overlay;
 }
+
+// Load system info bar
+api.getSystemInfo().then(info => {
+    document.getElementById('system-bar').innerHTML =
+        `<span class="sys-label">IP</span> <span class="sys-value">${info.url}</span>`;
+}).catch(() => {});
 
 ws.connect();
 initRobots();

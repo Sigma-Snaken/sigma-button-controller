@@ -12,6 +12,7 @@ from services.robot_manager import RobotManager
 from services.action_executor import ActionExecutor
 from services.button_manager import ButtonManager
 from services.mqtt_service import MQTTService
+from services.notifier import TelegramNotifier
 from utils.logger import get_logger
 
 logger = get_logger("main")
@@ -31,7 +32,19 @@ async def lifespan(app: FastAPI):
     ws_manager = WSManager()
     robot_manager = RobotManager()
     action_executor = ActionExecutor(robot_manager)
-    button_manager = ButtonManager(db, action_executor, ws_manager)
+    notifier = TelegramNotifier()
+    button_manager = ButtonManager(db, action_executor, ws_manager, notifier)
+
+    # Load telegram config from DB
+    try:
+        import json as _json
+        async with db.execute("SELECT value FROM settings WHERE key = 'telegram_config'") as cursor:
+            row = await cursor.fetchone()
+        if row:
+            cfg = _json.loads(row[0])
+            notifier.configure(cfg.get("bot_token", ""), cfg.get("chat_id", ""))
+    except Exception:
+        pass
 
     mqtt_host = os.environ.get("MQTT_HOST", "")
     mqtt_service = None
@@ -55,6 +68,7 @@ async def lifespan(app: FastAPI):
         "action_executor": action_executor,
         "button_manager": button_manager,
         "mqtt_service": mqtt_service,
+        "notifier": notifier,
     })
 
     yield
@@ -69,12 +83,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-from routers import robots, buttons, bindings, logs, ws, monitor  # noqa: E402
+from routers import robots, buttons, bindings, logs, ws, monitor, settings  # noqa: E402
 app.include_router(robots.router, prefix="/api")
 app.include_router(buttons.router, prefix="/api")
 app.include_router(bindings.router, prefix="/api")
 app.include_router(logs.router, prefix="/api")
 app.include_router(monitor.router, prefix="/api")
+app.include_router(settings.router, prefix="/api")
 app.include_router(ws.router)
 
 

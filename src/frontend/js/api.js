@@ -31,4 +31,10 @@ export const api = {
     // Monitor
     getMap: (id) => request('GET', `/robots/${id}/map`),
     getCamera: (id, camera) => request('GET', `/robots/${id}/camera/${camera}`),
+
+    // System
+    getSystemInfo: () => request('GET', '/system/info'),
+    getNotifySettings: () => request('GET', '/settings/notify'),
+    updateNotifySettings: (data) => request('PUT', '/settings/notify', data),
+    testNotify: () => request('POST', '/settings/notify/test'),
 };

@@ -16,10 +16,12 @@ class ButtonManager:
         db: aiosqlite.Connection,
         action_executor: ActionExecutor,
         ws_manager: WSManager,
+        notifier=None,
     ):
         self._db = db
         self._executor = action_executor
         self._ws = ws_manager
+        self._notifier = notifier
 
     async def handle_message(self, msg: dict) -> None:
         msg_type = msg.get("type")
@@ -121,3 +123,23 @@ class ButtonManager:
             "action": action,
             "result": result,
         })
+
+        # Telegram notify on failure
+        if not result.get("ok") and self._notifier:
+            error_msg = result.get("error", "Unknown error")
+            error_code = result.get("error_code", "")
+            code_str = f" [{error_code}]" if error_code else ""
+            # Get button name
+            btn_name = ieee
+            async with self._db.execute("SELECT name FROM buttons WHERE id = ?", (button_id,)) as cur:
+                row = await cur.fetchone()
+                if row and row[0]:
+                    btn_name = row[0]
+            text = (
+                f"⚠️ <b>動作執行失敗</b>\n"
+                f"按鈕: {btn_name} ({trigger})\n"
+                f"機器人: {robot_id}\n"
+                f"動作: {action}\n"
+                f"錯誤{code_str}: {error_msg}"
+            )
+            await self._notifier.send(text)
