@@ -22,7 +22,7 @@ services:
     restart: unless-stopped
 
   app:
-    image: ghcr.io/sigma-snaken/pi-zigbee:latest
+    image: ghcr.io/sigma-snaken/sigma-button-controller:latest
     ports:
       - "8000:8000"
     dns:

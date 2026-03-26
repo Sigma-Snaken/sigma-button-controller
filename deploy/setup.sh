@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "=== Pi Zigbee Controller — First-time Setup ==="
+echo "=== Sigma Button Controller — First-time Setup ==="
 
 if ! command -v docker &> /dev/null; then
     echo "Installing Docker..."
@@ -25,7 +25,7 @@ else
     echo "Warning: Zigbee dongle not detected. Plug it in and run: sudo udevadm trigger"
 fi
 
-APP_DIR=/opt/app/pi-zigbee
+APP_DIR=/opt/app/sigma-button-controller
 sudo mkdir -p "$APP_DIR"
 sudo chown "$USER:$USER" "$APP_DIR"
 

@@ -1,6 +1,6 @@
 # Sigma 簡易控制介面
 
-[![Build & Push](https://github.com/Sigma-Snaken/pi-zigbee/actions/workflows/build.yml/badge.svg)](https://github.com/Sigma-Snaken/pi-zigbee/actions/workflows/build.yml)
+[![Build & Push](https://github.com/Sigma-Snaken/sigma-button-controller/actions/workflows/build.yml/badge.svg)](https://github.com/Sigma-Snaken/sigma-button-controller/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Zigbee 按鈕 → Kachaka 機器人控制器，運行於 Raspberry Pi 5。透過 Web UI 配對 SONOFF SNZB-01 Zigbee 按鈕，將單擊/雙擊/長按綁定到 Kachaka 機器人動作（移動、搬運貨架、語音播報等），一鍵即觸發。
@@ -197,7 +197,7 @@ sequenceDiagram
 
 ```bash
 # 1. 下載部署檔案
-curl -L https://github.com/Sigma-Snaken/pi-zigbee/archive/refs/heads/main.tar.gz | tar xz --strip=2 pi-zigbee-main/deploy
+curl -L https://github.com/Sigma-Snaken/sigma-button-controller/archive/refs/heads/main.tar.gz | tar xz --strip=2 sigma-button-controller-main/deploy
 cd deploy
 
 # 2. 執行首次設定 (安裝 Docker、udev rule、建立目錄、桌面捷徑)
@@ -207,7 +207,7 @@ chmod +x setup.sh && ./setup.sh
 ls -la /dev/zigbee
 
 # 4. 啟動 (從 GHCR pull image，不需本地 build)
-cd /opt/app/pi-zigbee
+cd /opt/app/sigma-button-controller
 docker compose pull && docker compose up -d
 ```
 
@@ -237,8 +237,8 @@ docker compose pull && docker compose up -d
 ### 開發環境
 
 ```bash
-git clone https://github.com/Sigma-Snaken/pi-zigbee.git
-cd pi-zigbee
+git clone https://github.com/Sigma-Snaken/sigma-button-controller.git
+cd sigma-button-controller
 docker compose up --build
 # docker-compose.override.yml 自動套用：src/ volume mount + --reload
 ```
@@ -264,7 +264,7 @@ docker compose up --build
 ## 專案結構
 
 ```
-pi-zigbee/
+sigma-button-controller/
 ├── src/
 │   ├── backend/
 │   │   ├── main.py                  # FastAPI app + lifespan 啟動序列
@@ -404,7 +404,7 @@ uv venv .venv && uv pip install -r requirements.txt
 GitHub Actions 在 push 到 `main` 時自動觸發：
 
 1. 使用 QEMU + Buildx 交叉編譯 `linux/amd64` + `linux/arm64`
-2. 推送至 GHCR：`ghcr.io/sigma-snaken/pi-zigbee:latest`
+2. 推送至 GHCR：`ghcr.io/sigma-snaken/sigma-button-controller:latest`
 
 生產環境的 `deploy/docker-compose.yml` 直接拉取 GHCR image，無需在 Raspberry Pi 上 build。
 
