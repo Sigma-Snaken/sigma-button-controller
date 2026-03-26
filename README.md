@@ -200,15 +200,15 @@ sequenceDiagram
 curl -L https://github.com/Sigma-Snaken/sigma-button-controller/archive/refs/heads/main.tar.gz | tar xz --strip=1 sigma-button-controller-main/deploy
 cd deploy
 
-# 2. 執行首次設定 (安裝 Docker、udev rule、建立目錄、桌面捷徑)
+# 2. 執行首次設定 (安裝 Docker、Python、udev rule、systemd service)
 chmod +x setup.sh && ./setup.sh
 
-# 3. 確認 Zigbee dongle 已被辨識
-ls -la /dev/zigbee
-
-# 4. 啟動 (從 GHCR pull image，不需本地 build)
+# 3. 啟動 Mosquitto + Zigbee2MQTT (Docker)
 cd /opt/app/sigma-button-controller
 docker compose pull && docker compose up -d
+
+# 4. 啟動 App (systemd)
+sudo systemctl start sigma-app
 ```
 
 > **⚠️ Zigbee Dongle 注意事項**
@@ -292,10 +292,12 @@ sigma-button-controller/
 │           ├── buttons.js           # 按鈕配對頁面
 │           ├── bindings.js          # 綁定設定頁面 (含動態參數載入)
 │           ├── logs.js              # 執行記錄 + Telegram 設定頁面
-│           └── monitor.js           # 地圖 + 鏡頭 + RTT 熱力圖頁面
+│           ├── monitor.js           # 地圖 + 鏡頭 + RTT 熱力圖頁面
+│           └── wifi.js              # WiFi 設定 + AP 配網頁面
 ├── deploy/
-│   ├── docker-compose.yml           # 生產用: GHCR image + IPv4 強制
-│   └── setup.sh                     # 首次部署腳本 + 桌面捷徑
+│   ├── docker-compose.yml           # Mosquitto + Zigbee2MQTT (Docker)
+│   ├── sigma-app.service            # FastAPI app systemd service
+│   └── setup.sh                     # 首次部署腳本
 ├── mosquitto/
 │   └── mosquitto.conf               # Mosquitto broker 設定
 ├── zigbee2mqtt/
@@ -388,14 +390,13 @@ uv venv .venv && uv pip install -r requirements.txt
 
 測試涵蓋：database migrations, ws_manager, robot_manager, action_executor, mqtt_service (8 tests), button_manager, API endpoints, integration。
 
-## CI/CD
+## 部署架構
 
-GitHub Actions 在 push 到 `main` 時自動觸發：
-
-1. 使用 QEMU + Buildx 交叉編譯 `linux/amd64` + `linux/arm64`
-2. 推送至 GHCR：`ghcr.io/sigma-snaken/sigma-button-controller:latest`
-
-生產環境的 `deploy/docker-compose.yml` 直接拉取 GHCR image，無需在 Raspberry Pi 上 build。
+| 元件 | 部署方式 | 說明 |
+|------|---------|------|
+| Mosquitto | Docker | MQTT broker |
+| Zigbee2MQTT | Docker | Zigbee coordinator，需 device passthrough |
+| FastAPI App | systemd (host) | 需存取 D-Bus / NetworkManager (WiFi 管理) |
 
 ## License
 

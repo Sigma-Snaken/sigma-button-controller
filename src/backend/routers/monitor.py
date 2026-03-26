@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query
 
 from main import _state
@@ -16,8 +18,21 @@ async def get_map(robot_id: str):
     if not svc or not svc.queries:
         raise HTTPException(404, f"Robot '{robot_id}' not connected")
     try:
-        map_data = svc.queries.get_map()
-        pose_data = svc.queries.get_pose()
+        # Map is sync gRPC — run in thread to avoid blocking event loop
+        loop = asyncio.get_event_loop()
+        map_data = await loop.run_in_executor(None, svc.queries.get_map)
+
+        # Pose from controller.state (non-blocking, already polled in background)
+        pose = None
+        if svc.controller:
+            state = svc.controller.state
+            if state and getattr(state, 'pose_x', None) is not None:
+                pose = {
+                    "x": state.pose_x,
+                    "y": state.pose_y,
+                    "theta": state.pose_theta,
+                }
+
         return {
             "ok": True,
             "map": {
@@ -29,11 +44,7 @@ async def get_map(robot_id: str):
                 "origin_x": map_data.get("origin_x"),
                 "origin_y": map_data.get("origin_y"),
             },
-            "pose": {
-                "x": pose_data.get("x"),
-                "y": pose_data.get("y"),
-                "theta": pose_data.get("theta"),
-            } if pose_data.get("ok") else None,
+            "pose": pose,
         }
     except Exception as e:
         raise HTTPException(500, str(e))
@@ -49,29 +60,17 @@ async def get_camera(robot_id: str, camera: str):
     svc = rm.get(robot_id)
     if not svc:
         raise HTTPException(404, f"Robot '{robot_id}' not connected")
-    try:
-        # Use CameraStreamer (background thread) if running
-        streamer = svc.front_streamer if camera == "front" else svc.back_streamer
-        if streamer and streamer.is_running:
-            frame = streamer.latest_frame
-            if frame and frame.get("ok"):
-                return {
-                    "ok": True,
-                    "image_base64": frame.get("image_base64"),
-                    "format": frame.get("format", "jpeg"),
-                }
-        # Fallback: direct query (shouldn't happen if streamer is managed properly)
-        if camera == "front":
-            img = svc.queries.get_front_camera_image()
-        else:
-            img = svc.queries.get_back_camera_image()
-        return {
-            "ok": True,
-            "image_base64": img.get("image_base64"),
-            "format": img.get("format", "jpeg"),
-        }
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    streamer = svc.front_streamer if camera == "front" else svc.back_streamer
+    if not streamer or not streamer.is_running:
+        raise HTTPException(404, "Camera streamer not running. Start it first.")
+    frame = streamer.latest_frame
+    if not frame or not frame.get("ok"):
+        raise HTTPException(503, "No frame available yet")
+    return {
+        "ok": True,
+        "image_base64": frame.get("image_base64"),
+        "format": frame.get("format", "jpeg"),
+    }
 
 
 @router.post("/robots/{robot_id}/camera/{camera}/start")

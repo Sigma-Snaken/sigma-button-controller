@@ -1,294 +1,147 @@
-"""WiFi management via NetworkManager D-Bus API."""
+"""WiFi management via nmcli."""
 
 import asyncio
-from dataclasses import dataclass
-
-from dbus_fast.aio import MessageBus
-from dbus_fast import BusType, Variant
+import json
 
 from utils.logger import get_logger
 
 logger = get_logger("services.wifi_manager")
 
-NM_BUS = "org.freedesktop.NetworkManager"
-NM_PATH = "/org/freedesktop/NetworkManager"
-NM_IFACE = "org.freedesktop.NetworkManager"
-NM_SETTINGS_PATH = "/org/freedesktop/NetworkManager/Settings"
-NM_SETTINGS_IFACE = "org.freedesktop.NetworkManager.Settings"
-DEVICE_IFACE = "org.freedesktop.NetworkManager.Device"
-WIRELESS_IFACE = "org.freedesktop.NetworkManager.Device.Wireless"
-AP_IFACE = "org.freedesktop.NetworkManager.AccessPoint"
-CONN_ACTIVE_IFACE = "org.freedesktop.NetworkManager.Connection.Active"
-PROPS_IFACE = "org.freedesktop.DBus.Properties"
 
-# NM device types
-NM_DEVICE_TYPE_WIFI = 2
-
-# NM states
-NM_STATE_CONNECTED_GLOBAL = 70
-
-
-@dataclass
-class WifiNetwork:
-    ssid: str
-    signal: int
-    security: str
-    in_use: bool
-
-
-@dataclass
-class WifiStatus:
-    connected: bool
-    ssid: str
-    ip: str
-    signal: int
-    mode: str  # "client" | "ap"
+async def _run(cmd: list[str]) -> tuple[int, str]:
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await proc.communicate()
+    output = stdout.decode().strip() or stderr.decode().strip()
+    return proc.returncode, output
 
 
 class WifiManager:
-    """Manage WiFi connections via NetworkManager D-Bus."""
 
-    async def _get_bus(self) -> MessageBus:
-        return await MessageBus(bus_type=BusType.SYSTEM).connect()
-
-    async def _get_props(self, bus, path, iface):
-        introspection = await bus.introspect(NM_BUS, path)
-        obj = bus.get_proxy_object(NM_BUS, path, introspection)
-        props = obj.get_interface(PROPS_IFACE)
-        return props, obj
-
-    async def _get_wifi_device_path(self, bus) -> str:
-        introspection = await bus.introspect(NM_BUS, NM_PATH)
-        nm = bus.get_proxy_object(NM_BUS, NM_PATH, introspection)
-        nm_iface = nm.get_interface(NM_IFACE)
-        devices = await nm_iface.call_get_devices()
-        for dev_path in devices:
-            props, _ = await self._get_props(bus, dev_path, DEVICE_IFACE)
-            dev_type = await props.call_get(DEVICE_IFACE, "DeviceType")
-            if dev_type.value == NM_DEVICE_TYPE_WIFI:
-                return dev_path
-        raise RuntimeError("No WiFi device found")
-
-    async def scan(self) -> list[WifiNetwork]:
-        """Scan for available WiFi networks."""
-        bus = await self._get_bus()
-        try:
-            dev_path = await self._get_wifi_device_path(bus)
-            introspection = await bus.introspect(NM_BUS, dev_path)
-            dev = bus.get_proxy_object(NM_BUS, dev_path, introspection)
-            wireless = dev.get_interface(WIRELESS_IFACE)
-
-            # Request scan
-            await wireless.call_request_scan({})
-            await asyncio.sleep(3)
-
-            # Get access points
-            ap_paths = await wireless.call_get_access_points()
-
-            # Get current active AP
-            props, _ = await self._get_props(bus, dev_path, WIRELESS_IFACE)
-            try:
-                active_ap = await props.call_get(WIRELESS_IFACE, "ActiveAccessPoint")
-                active_ap_path = active_ap.value
-            except Exception:
-                active_ap_path = "/"
-
-            networks = []
-            seen_ssids = set()
-            for ap_path in ap_paths:
-                props, _ = await self._get_props(bus, ap_path, AP_IFACE)
-                ssid_bytes = await props.call_get(AP_IFACE, "Ssid")
-                ssid = bytes(ssid_bytes.value).decode("utf-8", errors="ignore")
-                if not ssid or ssid in seen_ssids:
-                    continue
-                seen_ssids.add(ssid)
-
-                signal = await props.call_get(AP_IFACE, "Strength")
-                flags = await props.call_get(AP_IFACE, "WpaFlags")
-                rsn_flags = await props.call_get(AP_IFACE, "RsnFlags")
-
-                if rsn_flags.value:
-                    security = "WPA2"
-                elif flags.value:
-                    security = "WPA"
-                else:
-                    security = "Open"
-
-                networks.append(WifiNetwork(
-                    ssid=ssid,
-                    signal=signal.value,
-                    security=security,
-                    in_use=(ap_path == active_ap_path),
-                ))
-
-            networks.sort(key=lambda n: (-n.in_use, -n.signal))
-            return networks
-        finally:
-            bus.disconnect()
-
-    async def status(self) -> WifiStatus:
+    async def status(self) -> dict:
         """Get current WiFi connection status."""
-        bus = await self._get_bus()
-        try:
-            dev_path = await self._get_wifi_device_path(bus)
-            props, _ = await self._get_props(bus, dev_path, DEVICE_IFACE)
+        code, out = await _run([
+            "nmcli", "-t", "-f", "ACTIVE,SSID,SIGNAL,MODE", "dev", "wifi"
+        ])
+        if code != 0:
+            return {"connected": False, "ssid": "", "ip": "", "signal": 0,
+                    "mode": "unknown", "error": out}
 
-            state = await props.call_get(DEVICE_IFACE, "State")
-            ip4_path = await props.call_get(DEVICE_IFACE, "Ip4Config")
+        ssid, signal, mode = "", 0, "client"
+        for line in out.splitlines():
+            parts = line.split(":")
+            if len(parts) >= 4 and parts[0] == "yes":
+                ssid = parts[1]
+                signal = int(parts[2]) if parts[2].isdigit() else 0
+                mode = "ap" if parts[3] == "AP" else "client"
+                break
 
-            ip = ""
-            if ip4_path.value != "/":
-                try:
-                    ip4_props, _ = await self._get_props(
-                        bus, ip4_path.value, "org.freedesktop.NetworkManager.IP4Config"
-                    )
-                    addr_data = await ip4_props.call_get(
-                        "org.freedesktop.NetworkManager.IP4Config", "AddressData"
-                    )
-                    if addr_data.value:
-                        ip = addr_data.value[0].get("address", Variant("s", "")).value
-                except Exception:
-                    pass
+        ip = ""
+        if ssid:
+            code2, out2 = await _run([
+                "nmcli", "-t", "-f", "IP4.ADDRESS", "dev", "show", "wlan0"
+            ])
+            if code2 == 0:
+                for line in out2.splitlines():
+                    if line.startswith("IP4.ADDRESS"):
+                        ip = line.split(":", 1)[1].split("/")[0]
+                        break
 
-            ssid = ""
-            signal = 0
-            connected = state.value >= 100  # NM_DEVICE_STATE_ACTIVATED
+        return {"connected": bool(ssid), "ssid": ssid, "ip": ip,
+                "signal": signal, "mode": mode}
 
-            if connected:
-                w_props, _ = await self._get_props(bus, dev_path, WIRELESS_IFACE)
-                try:
-                    active_ap = await w_props.call_get(WIRELESS_IFACE, "ActiveAccessPoint")
-                    if active_ap.value != "/":
-                        ap_props, _ = await self._get_props(bus, active_ap.value, AP_IFACE)
-                        ssid_bytes = await ap_props.call_get(AP_IFACE, "Ssid")
-                        ssid = bytes(ssid_bytes.value).decode("utf-8", errors="ignore")
-                        sig = await ap_props.call_get(AP_IFACE, "Strength")
-                        signal = sig.value
-                except Exception:
-                    pass
+    async def scan(self) -> list[dict]:
+        """Scan for available WiFi networks."""
+        # Trigger rescan
+        await _run(["nmcli", "dev", "wifi", "rescan"])
+        await asyncio.sleep(2)
 
-            # Detect AP mode
-            try:
-                w_props, _ = await self._get_props(bus, dev_path, WIRELESS_IFACE)
-                mode_val = await w_props.call_get(WIRELESS_IFACE, "Mode")
-                mode = "ap" if mode_val.value == 3 else "client"
-            except Exception:
-                mode = "client"
+        code, out = await _run([
+            "nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "dev", "wifi", "list"
+        ])
+        if code != 0:
+            return []
 
-            return WifiStatus(
-                connected=connected, ssid=ssid, ip=ip, signal=signal, mode=mode
-            )
-        finally:
-            bus.disconnect()
+        networks = []
+        seen = set()
+        for line in out.splitlines():
+            parts = line.split(":")
+            if len(parts) < 4:
+                continue
+            in_use = parts[0] == "*"
+            ssid = parts[1]
+            if not ssid or ssid in seen:
+                continue
+            seen.add(ssid)
+            signal = int(parts[2]) if parts[2].isdigit() else 0
+            security = parts[3] if parts[3] else "Open"
+            networks.append({
+                "ssid": ssid, "signal": signal,
+                "security": security, "in_use": in_use,
+            })
+
+        networks.sort(key=lambda n: (-n["in_use"], -n["signal"]))
+        return networks
 
     async def connect_wifi(self, ssid: str, password: str) -> bool:
         """Connect to a WiFi network."""
-        bus = await self._get_bus()
-        try:
-            dev_path = await self._get_wifi_device_path(bus)
+        # Stop hotspot first if active
+        await _run(["nmcli", "dev", "disconnect", "wlan0"])
+        await asyncio.sleep(1)
 
-            conn_settings = {
-                "connection": {
-                    "type": Variant("s", "802-11-wireless"),
-                    "id": Variant("s", ssid),
-                    "autoconnect": Variant("b", True),
-                },
-                "802-11-wireless": {
-                    "ssid": Variant("ay", ssid.encode("utf-8")),
-                    "mode": Variant("s", "infrastructure"),
-                },
-                "ipv4": {"method": Variant("s", "auto")},
-                "ipv6": {"method": Variant("s", "auto")},
-            }
+        # Remove any existing profile for this SSID
+        await _run(["nmcli", "connection", "delete", ssid])
 
-            if password:
-                conn_settings["802-11-wireless-security"] = {
-                    "key-mgmt": Variant("s", "wpa-psk"),
-                    "psk": Variant("s", password),
-                }
+        if password:
+            # Create connection profile with explicit security
+            code, out = await _run([
+                "nmcli", "connection", "add",
+                "type", "wifi",
+                "ifname", "wlan0",
+                "con-name", ssid,
+                "ssid", ssid,
+                "wifi-sec.key-mgmt", "wpa-psk",
+                "wifi-sec.psk", password,
+            ])
+            if code != 0:
+                raise RuntimeError(out)
+            # Activate it
+            code, out = await _run(["nmcli", "connection", "up", ssid])
+        else:
+            code, out = await _run(["nmcli", "dev", "wifi", "connect", ssid])
 
-            introspection = await bus.introspect(NM_BUS, NM_PATH)
-            nm = bus.get_proxy_object(NM_BUS, NM_PATH, introspection)
-            nm_iface = nm.get_interface(NM_IFACE)
-
-            await nm_iface.call_add_and_activate_connection(
-                conn_settings, dev_path, "/"
-            )
-            logger.info(f"WiFi connection to '{ssid}' initiated")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to connect to '{ssid}': {e}")
-            raise
-        finally:
-            bus.disconnect()
+        if code != 0:
+            logger.error(f"Failed to connect to '{ssid}': {out}")
+            raise RuntimeError(out)
+        logger.info(f"Connected to '{ssid}'")
+        return True
 
     async def start_hotspot(
-        self, ssid: str = "SIGMA-SETUP", password: str = "12345678"
+        self, ssid: str = "SIGMA-SETUP", password: str = "88888888"
     ) -> bool:
-        """Start WiFi AP hotspot for provisioning."""
-        bus = await self._get_bus()
-        try:
-            dev_path = await self._get_wifi_device_path(bus)
+        """Start WiFi AP hotspot."""
+        cmd = ["nmcli", "dev", "wifi", "hotspot", "ifname", "wlan0",
+               "ssid", ssid]
+        if password:
+            cmd += ["password", password]
 
-            conn_settings = {
-                "connection": {
-                    "type": Variant("s", "802-11-wireless"),
-                    "id": Variant("s", ssid),
-                    "autoconnect": Variant("b", False),
-                },
-                "802-11-wireless": {
-                    "ssid": Variant("ay", ssid.encode("utf-8")),
-                    "mode": Variant("s", "ap"),
-                    "band": Variant("s", "bg"),
-                    "channel": Variant("u", 6),
-                },
-                "802-11-wireless-security": {
-                    "key-mgmt": Variant("s", "wpa-psk"),
-                    "psk": Variant("s", password),
-                },
-                "ipv4": {
-                    "method": Variant("s", "shared"),
-                },
-                "ipv6": {"method": Variant("s", "disabled")},
-            }
-
-            introspection = await bus.introspect(NM_BUS, NM_PATH)
-            nm = bus.get_proxy_object(NM_BUS, NM_PATH, introspection)
-            nm_iface = nm.get_interface(NM_IFACE)
-
-            await nm_iface.call_add_and_activate_connection(
-                conn_settings, dev_path, "/"
-            )
-            logger.info(f"Hotspot '{ssid}' started")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to start hotspot: {e}")
-            raise
-        finally:
-            bus.disconnect()
+        code, out = await _run(cmd)
+        if code != 0:
+            logger.error(f"Failed to start hotspot: {out}")
+            raise RuntimeError(out)
+        logger.info(f"Hotspot '{ssid}' started")
+        return True
 
     async def stop_hotspot(self) -> bool:
-        """Stop the current hotspot and return to client mode."""
-        bus = await self._get_bus()
-        try:
-            dev_path = await self._get_wifi_device_path(bus)
-
-            introspection = await bus.introspect(NM_BUS, dev_path)
-            dev = bus.get_proxy_object(NM_BUS, dev_path, introspection)
-            dev_iface = dev.get_interface(DEVICE_IFACE)
-
-            await dev_iface.call_disconnect()
-            logger.info("Hotspot stopped, device disconnected")
-
-            # Re-activate auto-connect
-            await asyncio.sleep(1)
-            introspection = await bus.introspect(NM_BUS, NM_PATH)
-            nm = bus.get_proxy_object(NM_BUS, NM_PATH, introspection)
-            nm_iface = nm.get_interface(NM_IFACE)
-            await nm_iface.call_activate_connection("/", dev_path, "/")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to stop hotspot: {e}")
-            raise
-        finally:
-            bus.disconnect()
+        """Stop hotspot and reconnect to previous network."""
+        # Disconnect AP
+        await _run(["nmcli", "dev", "disconnect", "wlan0"])
+        await asyncio.sleep(1)
+        # Reconnect to auto network
+        code, out = await _run(["nmcli", "dev", "connect", "wlan0"])
+        if code != 0:
+            logger.error(f"Failed to reconnect: {out}")
+            raise RuntimeError(out)
+        logger.info("Hotspot stopped, reconnected")
+        return True

@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { showToast } from './app.js';
+import { showToast, showModal } from './app.js';
 
 const container = document.getElementById('wifi');
 
@@ -8,6 +8,7 @@ export async function initWifi() {
 }
 
 async function renderWifi() {
+    container.innerHTML = `<div class="card"><div class="card-header"><h2>WiFi 狀態</h2></div><p class="hint">載入中...</p></div>`;
     const status = await api.getWifiStatus().catch(() => ({
         connected: false, ssid: '', ip: '', signal: 0, mode: 'unknown', error: 'D-Bus 未連線'
     }));
@@ -62,7 +63,7 @@ async function renderWifi() {
                     </div>
                     <div class="form-group form-inline">
                         <label>密碼</label>
-                        <input id="ap-pass" value="12345678" type="password" />
+                        <input id="ap-pass" value="88888888" type="password" />
                     </div>
                     <button class="btn btn-primary" id="hotspot-start">啟動 AP</button>
                 `}
@@ -132,13 +133,19 @@ async function scanNetworks() {
     }
 }
 
-async function connectToNetwork(ssid, security) {
+function connectToNetwork(ssid, security) {
     const needPassword = security !== 'Open';
-    let password = '';
     if (needPassword) {
-        password = prompt(`輸入 ${ssid} 的密碼:`);
-        if (password === null) return;
+        showModal(`連線至 ${ssid}`, `<div class="form-group"><label>密碼</label><input id="wifi-pwd" type="password" placeholder="輸入 WiFi 密碼"></div>`, async () => {
+            const password = document.getElementById('wifi-pwd').value;
+            await doConnect(ssid, password);
+        });
+    } else {
+        doConnect(ssid, '');
     }
+}
+
+async function doConnect(ssid, password) {
     try {
         const result = await api.connectWifi({ ssid, password });
         if (result.ok) {

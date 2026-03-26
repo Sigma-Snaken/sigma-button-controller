@@ -1,3 +1,4 @@
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -56,11 +57,13 @@ async def lifespan(app: FastAPI):
         await mqtt_service.start()
 
     async with db.execute("SELECT id, ip FROM robots WHERE enabled = 1") as cursor:
-        async for row in cursor:
-            try:
-                robot_manager.add(row[0], row[1])
-            except Exception as e:
-                logger.warning(f"Failed to connect robot {row[0]} at {row[1]}: {e}")
+        rows = await cursor.fetchall()
+    loop = asyncio.get_event_loop()
+    for robot_id, ip in rows:
+        try:
+            await loop.run_in_executor(None, robot_manager.add, robot_id, ip)
+        except Exception as e:
+            logger.warning(f"Failed to connect robot {robot_id} at {ip}: {e}")
 
     # Start RTT logger
     rtt_logger = RTTLogger(db, robot_manager, interval=5.0)

@@ -17,7 +17,6 @@ class RTTLogger:
         self._rm = robot_manager
         self._interval = interval
         self._task: asyncio.Task | None = None
-        self._serials: dict[str, str] = {}
         self._last_poll_count: dict[str, int] = {}  # robot_id -> last seen poll_count
 
     async def start(self) -> None:
@@ -80,15 +79,7 @@ class RTTLogger:
                 if x is None or y is None:
                     continue
 
-                # Cache serial
-                serial = self._serials.get(robot_id)
-                if not serial and svc.conn:
-                    try:
-                        ping = svc.conn.ping()
-                        serial = ping.get("serial", "")
-                        self._serials[robot_id] = serial
-                    except Exception:
-                        serial = ""
+                serial = svc.serial or ""
 
                 now = datetime.now(timezone.utc).isoformat()
                 for rtt_ms in new_rtts:

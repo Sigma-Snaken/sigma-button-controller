@@ -21,16 +21,3 @@ services:
       - mosquitto
     restart: unless-stopped
 
-  app:
-    image: ghcr.io/sigma-snaken/sigma-button-controller:latest
-    network_mode: host
-    volumes:
-      - ./data:/app/data
-      - /var/run/dbus:/var/run/dbus
-    environment:
-      - MQTT_HOST=127.0.0.1
-      - MQTT_PORT=1883
-      - TZ=Asia/Taipei
-    depends_on:
-      - mosquitto
-    restart: unless-stopped

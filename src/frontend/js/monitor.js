@@ -16,6 +16,7 @@ export async function initMonitor() {
 }
 
 async function renderMonitor() {
+    container.innerHTML = `<div class="card"><div class="card-header"><h2>機器人監控</h2></div><p style="color:var(--text-muted)">載入中...</p></div>`;
     const robots = await api.listRobots();
     const onlineRobots = robots.filter(r => r.online);
 
@@ -256,8 +257,8 @@ function startCameraStream(robotId, camera, camContainer) {
         }
     };
     fetchFrame();
-    if (camera === 'front') { frontCamTimer = setInterval(fetchFrame, 2000); }
-    else { backCamTimer = setInterval(fetchFrame, 2000); }
+    if (camera === 'front') { frontCamTimer = setInterval(fetchFrame, 200); }
+    else { backCamTimer = setInterval(fetchFrame, 200); }
 }
 
 function stopCameraStream(camera) {

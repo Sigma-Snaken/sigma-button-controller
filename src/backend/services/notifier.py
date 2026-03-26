@@ -1,7 +1,4 @@
-import asyncio
-import json
-from urllib.request import urlopen, Request
-from urllib.error import URLError
+import httpx
 
 from utils.logger import get_logger
 
@@ -29,25 +26,17 @@ class TelegramNotifier:
     async def send(self, message: str) -> bool:
         if not self.enabled:
             return False
-        try:
-            return await asyncio.get_event_loop().run_in_executor(
-                None, self._send_sync, message
-            )
-        except Exception as e:
-            logger.error(f"Telegram send failed: {e}")
-            return False
-
-    def _send_sync(self, message: str) -> bool:
         url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
         all_ok = True
-        for chat_id in self.chat_ids:
-            data = json.dumps({"chat_id": chat_id, "text": message, "parse_mode": "HTML"}).encode()
-            req = Request(url, data=data, headers={"Content-Type": "application/json"})
-            try:
-                with urlopen(req, timeout=10) as resp:
-                    if resp.status != 200:
+        async with httpx.AsyncClient(timeout=10) as client:
+            for chat_id in self.chat_ids:
+                try:
+                    resp = await client.post(url, json={
+                        "chat_id": chat_id, "text": message, "parse_mode": "HTML",
+                    })
+                    if resp.status_code != 200:
                         all_ok = False
-            except URLError as e:
-                logger.error(f"Telegram API error for {chat_id}: {e}")
-                all_ok = False
+                except Exception as e:
+                    logger.error(f"Telegram API error for {chat_id}: {e}")
+                    all_ok = False
         return all_ok

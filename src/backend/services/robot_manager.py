@@ -19,6 +19,7 @@ class RobotService:
         self.commands: KachakaCommands | None = None
         self.queries: KachakaQueries | None = None
         self.controller: RobotController | None = None
+        self.serial: str | None = None
         self.front_streamer: CameraStreamer | None = None
         self.back_streamer: CameraStreamer | None = None
 
@@ -30,7 +31,8 @@ class RobotService:
         self.commands = _cmds_cls(self.conn)
         self.queries = _queries_cls(self.conn)
         result = self.conn.ping()
-        logger.info(f"Connected to robot {self.robot_id} at {self.ip}: {result.get('serial', 'unknown')}")
+        self.serial = result.get('serial')
+        logger.info(f"Connected to robot {self.robot_id} at {self.ip}: {self.serial or 'unknown'}")
 
         # Initialize RobotController for background polling + metrics
         try:
@@ -46,14 +48,14 @@ class RobotService:
         if camera == "front":
             if self.front_streamer and self.front_streamer.is_running:
                 return self.front_streamer
-            self.front_streamer = CameraStreamer(self.conn, interval=1.0, camera="front")
+            self.front_streamer = CameraStreamer(self.conn, interval=0.2, camera="front")
             self.front_streamer.start()
             logger.info(f"Front CameraStreamer started for {self.robot_id}")
             return self.front_streamer
         else:
             if self.back_streamer and self.back_streamer.is_running:
                 return self.back_streamer
-            self.back_streamer = CameraStreamer(self.conn, interval=1.0, camera="back")
+            self.back_streamer = CameraStreamer(self.conn, interval=0.2, camera="back")
             self.back_streamer.start()
             logger.info(f"Back CameraStreamer started for {self.robot_id}")
             return self.back_streamer

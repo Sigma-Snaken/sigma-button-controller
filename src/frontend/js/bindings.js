@@ -13,8 +13,8 @@ const ACTIONS = [
 export async function initBindings() { await renderBindings(); }
 
 async function renderBindings() {
-    const buttons = await api.listButtons();
-    const robots = await api.listRobots();
+    container.innerHTML = `<div class="card"><div class="card-header"><h2>動作設定</h2></div><p style="color:var(--text-muted)">載入中...</p></div>`;
+    const [buttons, robots] = await Promise.all([api.listButtons(), api.listRobots()]);
     container.innerHTML = `<div class="card"><div class="card-header"><h2>動作設定</h2></div>${buttons.length===0?'<p style="color:var(--text-muted)">請先配對按鈕</p>':`<div class="form-group"><label>選擇按鈕</label><select id="bind-button-select">${buttons.map(b=>`<option value="${b.id}">${b.name||b.ieee_addr}</option>`).join('')}</select></div><div id="trigger-slots"></div><div style="margin-top:1rem;text-align:right"><button class="btn btn-primary" id="save-bindings">儲存設定</button></div>`}</div>`;
     if(buttons.length===0) return;
     const sel=container.querySelector('#bind-button-select');

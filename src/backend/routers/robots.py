@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime, timezone
 
@@ -27,29 +28,21 @@ async def list_robots():
     async with db.execute("SELECT id, name, ip, enabled, created_at FROM robots") as cursor:
         rows = await cursor.fetchall()
     result = []
+    rm = _state.get("robot_manager")
     for row in rows:
         robot_id, name, ip, enabled, created_at = row
         online = False
         battery = None
         serial = None
-        rm = _state.get("robot_manager")
         if rm:
             svc = rm.get(robot_id)
-            if svc and svc.queries:
-                try:
-                    bat = svc.queries.get_battery()
-                    if bat.get("ok"):
-                        online = True
-                        battery = bat.get("percentage")
-                except Exception:
-                    pass
             if svc and svc.conn:
-                try:
-                    ping = svc.conn.ping()
-                    if ping.get("ok"):
-                        serial = ping.get("serial")
-                except Exception:
-                    pass
+                from kachaka_core.connection import ConnectionState
+                online = svc.conn.state == ConnectionState.CONNECTED
+                if online and svc.controller:
+                    state = svc.controller.state
+                    battery = getattr(state, 'battery_pct', None)
+                serial = svc.serial
         result.append({
             "id": robot_id, "name": name, "ip": ip,
             "enabled": bool(enabled), "created_at": created_at,
@@ -113,7 +106,8 @@ async def get_locations(robot_id: str):
     if not svc or not svc.queries:
         raise HTTPException(404, f"Robot '{robot_id}' not connected")
     try:
-        return svc.queries.list_locations()
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, svc.queries.list_locations)
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -127,7 +121,8 @@ async def get_shelves(robot_id: str):
     if not svc or not svc.queries:
         raise HTTPException(404, f"Robot '{robot_id}' not connected")
     try:
-        return svc.queries.list_shelves()
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, svc.queries.list_shelves)
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -141,6 +136,7 @@ async def get_shortcuts(robot_id: str):
     if not svc or not svc.queries:
         raise HTTPException(404, f"Robot '{robot_id}' not connected")
     try:
-        return svc.queries.list_shortcuts()
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, svc.queries.list_shortcuts)
     except Exception as e:
         raise HTTPException(500, str(e))

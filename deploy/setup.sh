@@ -3,6 +3,7 @@ set -euo pipefail
 
 echo "=== Sigma Button Controller — First-time Setup ==="
 
+# ── Docker (for Mosquitto + Zigbee2MQTT) ──
 if ! command -v docker &> /dev/null; then
     echo "Installing Docker..."
     curl -fsSL https://get.docker.com | sh
@@ -11,7 +12,19 @@ if ! command -v docker &> /dev/null; then
     exit 0
 fi
 
-# Create udev rule for Zigbee dongle (fixed /dev/zigbee symlink)
+# ── Python + uv (for FastAPI app) ──
+if ! command -v python3 &> /dev/null; then
+    echo "Installing Python..."
+    sudo apt-get update && sudo apt-get install -y python3 python3-venv
+fi
+
+if ! command -v uv &> /dev/null; then
+    echo "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
+fi
+
+# ── Zigbee dongle udev rule ──
 echo "Setting up Zigbee dongle udev rule..."
 echo 'SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="zigbee"' | sudo tee /etc/udev/rules.d/99-zigbee.rules > /dev/null
 sudo udevadm control --reload-rules && sudo udevadm trigger
@@ -21,6 +34,7 @@ else
     echo "Warning: Zigbee dongle not detected. Plug it in and run: sudo udevadm trigger"
 fi
 
+# ── App directory ──
 APP_DIR=/opt/app/sigma-button-controller
 sudo mkdir -p "$APP_DIR"
 sudo chown "$USER:$USER" "$APP_DIR"
@@ -28,6 +42,17 @@ sudo chown "$USER:$USER" "$APP_DIR"
 cp docker-compose.yml "$APP_DIR/"
 mkdir -p "$APP_DIR/data" "$APP_DIR/mosquitto" "$APP_DIR/zigbee2mqtt"
 
+# ── Download app source ──
+echo "Downloading app source..."
+curl -L https://github.com/Sigma-Snaken/sigma-button-controller/archive/refs/heads/main.tar.gz \
+    | tar xz --strip=1 -C "$APP_DIR" sigma-button-controller-main/src sigma-button-controller-main/requirements.txt
+
+# ── Python venv + dependencies ──
+echo "Installing Python dependencies..."
+uv venv "$APP_DIR/.venv"
+uv pip install --python "$APP_DIR/.venv/bin/python" -r "$APP_DIR/requirements.txt"
+
+# ── Mosquitto config ──
 if [ ! -f "$APP_DIR/mosquitto/mosquitto.conf" ]; then
     cat > "$APP_DIR/mosquitto/mosquitto.conf" << 'CONF'
 listener 1883
@@ -38,6 +63,7 @@ log_dest stdout
 CONF
 fi
 
+# ── Zigbee2MQTT config ──
 if [ ! -f "$APP_DIR/zigbee2mqtt/configuration.yaml" ]; then
     cat > "$APP_DIR/zigbee2mqtt/configuration.yaml" << 'CONF'
 mqtt:
@@ -54,7 +80,24 @@ permit_join: false
 CONF
 fi
 
-# Create desktop shortcut
+# ── Polkit rule for WiFi management ──
+echo "Setting up WiFi management permissions..."
+sudo tee /etc/polkit-1/rules.d/50-sigma-wifi.rules > /dev/null << 'RULE'
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("org.freedesktop.NetworkManager") === 0 &&
+        subject.user === "sigma") {
+        return polkit.Result.YES;
+    }
+});
+RULE
+
+# ── Systemd service ──
+echo "Installing systemd service..."
+sudo cp sigma-app.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable sigma-app
+
+# ── Desktop shortcut ──
 DESKTOP_DIR="$HOME/Desktop"
 if [ -d "$DESKTOP_DIR" ]; then
     cat > "$DESKTOP_DIR/sigma-controller.desktop" << 'SHORTCUT'
@@ -74,3 +117,4 @@ echo "=== Setup complete ==="
 echo "Next steps:"
 echo "  1. Verify Zigbee dongle: ls -la /dev/zigbee"
 echo "  2. cd $APP_DIR && docker compose pull && docker compose up -d"
+echo "  3. sudo systemctl start sigma-app"

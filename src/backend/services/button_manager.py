@@ -71,13 +71,19 @@ class ButtonManager:
     async def _on_button_action(self, msg: dict) -> None:
         ieee = msg["ieee_addr"]
         trigger = msg["action"]
+        now = datetime.now(timezone.utc).isoformat()
 
+        # Update battery + last_seen in one query, and fetch button_id
         if msg.get("battery") is not None:
             await self._db.execute(
                 "UPDATE buttons SET battery = ?, last_seen = ? WHERE ieee_addr = ?",
-                (msg["battery"], datetime.now(timezone.utc).isoformat(), ieee),
+                (msg["battery"], now, ieee),
             )
-            await self._db.commit()
+        else:
+            await self._db.execute(
+                "UPDATE buttons SET last_seen = ? WHERE ieee_addr = ?", (now, ieee),
+            )
+        await self._db.commit()
 
         async with self._db.execute(
             "SELECT id FROM buttons WHERE ieee_addr = ?", (ieee,)

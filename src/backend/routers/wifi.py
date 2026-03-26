@@ -16,15 +16,13 @@ class WifiConnectRequest(BaseModel):
 
 class HotspotRequest(BaseModel):
     ssid: str = "SIGMA-SETUP"
-    password: str = "12345678"
+    password: str = "88888888"
 
 
 @router.get("/wifi/status")
 async def wifi_status():
     try:
-        st = await wifi.status()
-        return {"connected": st.connected, "ssid": st.ssid, "ip": st.ip,
-                "signal": st.signal, "mode": st.mode}
+        return await wifi.status()
     except Exception as e:
         return {"connected": False, "ssid": "", "ip": "", "signal": 0,
                 "mode": "unknown", "error": str(e)}
@@ -34,11 +32,7 @@ async def wifi_status():
 async def wifi_scan():
     try:
         networks = await wifi.scan()
-        return {"networks": [
-            {"ssid": n.ssid, "signal": n.signal, "security": n.security,
-             "in_use": n.in_use}
-            for n in networks
-        ]}
+        return {"networks": networks}
     except Exception as e:
         return {"networks": [], "error": str(e)}
 

@@ -551,7 +551,7 @@ tr:hover td {
 @media (max-width: 768px) {
     .system-bar {
         padding: 4px 0.75rem;
-        font-size: 10px;
+        font-size: 13px;
     }
 
     .fab-menu {
@@ -574,7 +574,7 @@ tr:hover td {
     }
 
     header h1 {
-        font-size: 11px;
+        font-size: 14px;
         letter-spacing: 1.5px;
         margin-right: 0;
     }
@@ -594,11 +594,11 @@ tr:hover td {
     }
 
     table {
-        font-size: 11px;
+        font-size: 13px;
     }
 
     th, td {
-        padding: 4px 6px;
+        padding: 6px 8px;
     }
 
     .trigger-grid {
@@ -625,40 +625,63 @@ tr:hover td {
     }
 
     .btn {
-        font-size: 9px;
-        padding: 0.4rem 0.75rem;
+        font-size: 12px;
+        padding: 0.5rem 0.85rem;
     }
 
     .btn-sm {
-        padding: 0.2rem 0.4rem;
-        font-size: 8px;
+        padding: 0.3rem 0.6rem;
+        font-size: 11px;
     }
 
     .form-group input,
     .form-group select {
         padding: 8px 10px;
-        font-size: 14px;
+        font-size: 15px;
+    }
+
+    .form-group label {
+        font-size: 13px;
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+    }
+
+    .sys-label, .sys-value {
+        font-size: 13px;
+    }
+
+    .hint {
+        font-size: 13px;
     }
 
     .toast {
         bottom: 5rem;
         left: 1rem;
         right: 1rem;
+        font-size: 13px;
+    }
+
+    .fab-panel .fab-item {
+        font-size: 14px;
+        padding: 0.6rem 1rem;
     }
 }
 
 @media (max-width: 480px) {
     header h1 {
-        font-size: 10px;
+        font-size: 13px;
         letter-spacing: 1px;
     }
 
     .card-header h2 {
-        font-size: 10px;
+        font-size: 13px;
     }
 
     table {
-        font-size: 10px;
+        font-size: 12px;
     }
 
     .monitor-section-header {

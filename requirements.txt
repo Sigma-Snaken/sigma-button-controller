@@ -3,6 +3,5 @@ fastapi
 uvicorn[standard]
 aiosqlite
 aiomqtt
-dbus-fast
 pytest
 pytest-asyncio

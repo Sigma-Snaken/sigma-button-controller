@@ -90,3 +90,4 @@ initBindings();
 initLogs(ws);
 initMonitor();
 initWifi();
+// All init functions render skeletons synchronously then await data independently
