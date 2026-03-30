@@ -79,8 +79,11 @@ export function showModal(title, bodyHtml, onConfirm) {
 
 // Load system info bar
 api.getSystemInfo().then(info => {
-    document.getElementById('system-bar').innerHTML =
-        `<span class="sys-label">URL</span> <span class="sys-value">${info.url}</span>`;
+    const parts = [];
+    if (info.wifi_ip) parts.push(`<span class="sys-label">WiFi</span> <span class="sys-value">${info.wifi_ip}</span>`);
+    if (info.eth_ip) parts.push(`<span class="sys-label">LAN</span> <span class="sys-value">${info.eth_ip}</span>`);
+    if (!parts.length) parts.push(`<span class="sys-label">URL</span> <span class="sys-value">${info.url}</span>`);
+    document.getElementById('system-bar').innerHTML = parts.join('<span style="margin:0 0.5rem;color:var(--border-medium)">|</span>');
 }).catch(() => {});
 
 ws.connect();

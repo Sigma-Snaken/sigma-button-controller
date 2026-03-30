@@ -36,7 +36,14 @@ async def wifi_status():
             if line.startswith("IP4.ADDRESS"):
                 ip = line.split(":", 1)[1].split("/")[0]
                 break
-    return {"connected": bool(ssid), "ssid": ssid, "ip": ip, "signal": signal, "mode": mode}
+    # Also grab eth0 IP if available
+    eth_ip = ""
+    _, out3 = await run(["nmcli", "-t", "-f", "IP4.ADDRESS", "dev", "show", "eth0"])
+    for line in (out3 or "").splitlines():
+        if line.startswith("IP4.ADDRESS"):
+            eth_ip = line.split(":", 1)[1].split("/")[0]
+            break
+    return {"connected": bool(ssid), "ssid": ssid, "ip": ip, "signal": signal, "mode": mode, "eth_ip": eth_ip}
 
 
 async def wifi_scan():

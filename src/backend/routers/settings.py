@@ -15,17 +15,19 @@ router = APIRouter()
 @router.get("/system/info")
 async def system_info(request: Request):
     wifi_url = os.environ.get("WIFI_AGENT_URL", "http://host.docker.internal:8001")
+    wifi_ip = ""
+    eth_ip = ""
     try:
         async with httpx.AsyncClient(timeout=2) as client:
             resp = await client.get(f"{wifi_url}/status")
-            ip = resp.json().get("ip")
-            if ip:
-                return {"host": ip, "url": f"http://{ip}:8000"}
+            data = resp.json()
+            wifi_ip = data.get("ip", "")
+            eth_ip = data.get("eth_ip", "")
     except Exception:
         pass
-    # Fallback to request host header
-    host = request.headers.get("host", "unknown")
-    return {"host": host, "url": f"http://{host}"}
+    # Primary IP: prefer wifi, fallback to eth, then request header
+    ip = wifi_ip or eth_ip or request.headers.get("host", "unknown").split(":")[0]
+    return {"host": ip, "url": f"http://{ip}:8000", "wifi_ip": wifi_ip, "eth_ip": eth_ip}
 
 
 @router.get("/settings/notify")
