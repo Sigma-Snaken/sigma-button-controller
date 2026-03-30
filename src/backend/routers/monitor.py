@@ -159,6 +159,17 @@ async def get_metrics(robot_id: str):
         except Exception:
             result["controller"] = None
 
+        try:
+            state = svc.controller.state
+            result["state"] = {
+                "connection_state": getattr(state, 'connection_state', 'unknown'),
+                "is_command_running": getattr(state, 'is_command_running', False),
+                "moving_shelf_id": getattr(state, 'moving_shelf_id', None),
+                "shelf_dropped": getattr(state, 'shelf_dropped', False),
+            }
+        except Exception:
+            result["state"] = None
+
     return result
 
 

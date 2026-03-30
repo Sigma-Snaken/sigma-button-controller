@@ -34,19 +34,25 @@ async def list_robots():
         online = False
         battery = None
         serial = None
+        connection_state = "unknown"
+        moving_shelf_id = None
         if rm:
             svc = rm.get(robot_id)
             if svc and svc.conn:
                 from kachaka_core.connection import ConnectionState
                 online = svc.conn.state == ConnectionState.CONNECTED
-                if online and svc.controller:
+                serial = svc.serial
+                if svc.controller:
                     state = svc.controller.state
                     battery = getattr(state, 'battery_pct', None)
-                serial = svc.serial
+                    connection_state = getattr(state, 'connection_state', 'unknown')
+                    moving_shelf_id = getattr(state, 'moving_shelf_id', None)
         result.append({
             "id": robot_id, "name": name, "ip": ip,
             "enabled": bool(enabled), "created_at": created_at,
             "online": online, "battery": battery, "serial": serial,
+            "connection_state": connection_state,
+            "moving_shelf_id": moving_shelf_id,
         })
     return result
 
