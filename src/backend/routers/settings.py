@@ -1,7 +1,7 @@
 import json
 import os
-import socket
 
+import httpx
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
@@ -14,14 +14,18 @@ router = APIRouter()
 
 @router.get("/system/info")
 async def system_info(request: Request):
-    host = request.headers.get("host", "unknown")
-    # Resolve mDNS/hostname to IP for display
-    hostname = host.split(":")[0]
+    wifi_url = os.environ.get("WIFI_AGENT_URL", "http://host.docker.internal:8001")
     try:
-        ip = socket.gethostbyname(hostname)
-    except socket.gaierror:
-        ip = hostname
-    return {"host": ip, "url": f"http://{ip}:8000"}
+        async with httpx.AsyncClient(timeout=2) as client:
+            resp = await client.get(f"{wifi_url}/status")
+            ip = resp.json().get("ip")
+            if ip:
+                return {"host": ip, "url": f"http://{ip}:8000"}
+    except Exception:
+        pass
+    # Fallback to request host header
+    host = request.headers.get("host", "unknown")
+    return {"host": host, "url": f"http://{host}"}
 
 
 @router.get("/settings/notify")
