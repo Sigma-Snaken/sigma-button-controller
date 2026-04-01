@@ -1,6 +1,7 @@
 data/
 .superpowers/
 docs/plans/
+docs/superpowers/
 __pycache__/
 *.pyc
 .venv/
@@ -10,4 +11,3 @@ zigbee2mqtt/state.json
 zigbee2mqtt/database.db
 zigbee2mqtt/coordinator_backup.json
 zigbee2mqtt/log/
-docs/
