@@ -87,7 +87,7 @@ api.getSystemInfo().then(info => {
 }).catch(() => {});
 
 ws.connect();
-initRobots();
+initRobots(ws);
 initButtons(ws);
 initBindings();
 initLogs(ws);

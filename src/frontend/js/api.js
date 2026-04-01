@@ -48,4 +48,11 @@ export const api = {
     getNotifySettings: () => request('GET', '/settings/notify'),
     updateNotifySettings: (data) => request('PUT', '/settings/notify', data),
     testNotify: () => request('POST', '/settings/notify/test'),
+
+    // Queue
+    getQueue: () => request('GET', '/queue'),
+    removeFromQueue: (id) => request('DELETE', `/queue/${id}`),
+    cancelCurrent: (robotId) => request('POST', `/queue/cancel/${robotId}`),
+    getQueueSettings: () => request('GET', '/settings/queue'),
+    updateQueueSettings: (data) => request('PUT', '/settings/queue', data),
 };
