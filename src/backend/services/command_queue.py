@@ -121,6 +121,7 @@ class CommandQueue:
         button_id: int | None,
         trigger: str | None,
     ) -> dict:
+        """Execute directly when queue is disabled."""
         if self._executing.get(robot_id):
             logger.info(f"Rejected {action} on {robot_id}: busy (queue disabled)")
             await self._ws.broadcast("queue:rejected", {
@@ -143,19 +144,23 @@ class CommandQueue:
 
         try:
             result = await self._executor.execute(robot_id, action, params)
-            await self._write_action_log(item, result)
-            await self._ws.broadcast("action_executed", {
-                "button_id": button_id,
-                "trigger": trigger,
-                "robot_id": robot_id,
-                "action": action,
-                "result": result,
-            })
-            return result
-        finally:
-            self._executing[robot_id] = None
+        except Exception as e:
+            result = {"ok": False, "error": str(e)}
+            logger.error(f"Direct execution error for {action} on {robot_id}: {e}")
+
+        self._executing[robot_id] = None
+        await self._write_action_log(item, result)
+        await self._ws.broadcast("action_executed", {
+            "button_id": button_id,
+            "trigger": trigger,
+            "robot_id": robot_id,
+            "action": action,
+            "result": result,
+        })
+        return result
 
     async def _worker(self, robot_id: str) -> None:
+        """Process queue items sequentially for a robot."""
         logger.info(f"Worker started for {robot_id}")
         try:
             while self._queues.get(robot_id):
@@ -197,6 +202,7 @@ class CommandQueue:
             logger.info(f"Worker stopped for {robot_id}")
 
     async def remove(self, queue_id: str) -> dict:
+        """Remove a pending item from the queue."""
         for robot_id, queue in self._queues.items():
             for i, item in enumerate(queue):
                 if item.id == queue_id:
@@ -210,6 +216,7 @@ class CommandQueue:
         return {"ok": False, "error": "Item not found in queue"}
 
     async def cancel_current(self, robot_id: str) -> dict:
+        """Cancel the currently executing command on a robot."""
         executing = self._executing.get(robot_id)
         if not executing:
             return {"ok": True, "message": "no command running"}
@@ -219,7 +226,7 @@ class CommandQueue:
             return {"ok": False, "error": f"Robot '{robot_id}' not connected"}
 
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, svc.commands.cancel_command)
             logger.info(f"Cancelled command on {robot_id}")
             await self._ws.broadcast("queue:cancelled", {
@@ -232,6 +239,7 @@ class CommandQueue:
             return {"ok": False, "error": str(e)}
 
     async def _write_action_log(self, item: QueueItem, result: dict) -> None:
+        """Write execution result to action_logs table."""
         now = datetime.now(timezone.utc).isoformat()
         params_json = json.dumps(item.params) if item.params else "{}"
         try:
