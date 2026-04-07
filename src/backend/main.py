@@ -16,6 +16,8 @@ from services.button_manager import ButtonManager
 from services.mqtt_service import MQTTService
 from services.notifier import TelegramNotifier
 from services.rtt_logger import RTTLogger
+from services.route_dispatcher import RouteDispatcher
+from services.route_service import RouteService
 from utils.logger import get_logger
 
 logger = get_logger("main")
@@ -71,6 +73,18 @@ async def lifespan(app: FastAPI):
     notifier = TelegramNotifier()
     button_manager = ButtonManager(db, command_queue, ws_manager)
 
+    route_dispatcher = RouteDispatcher(
+        db=db, ws_manager=ws_manager, robot_manager=robot_manager,
+    )
+    route_service = RouteService(
+        db=db, action_executor=action_executor,
+        ws_manager=ws_manager, notifier=notifier,
+    )
+    route_dispatcher.set_route_service(route_service)
+    route_service.set_dispatcher(route_dispatcher)
+    button_manager.set_route_service(route_service)
+    button_manager.set_route_dispatcher(route_dispatcher)
+
     # Load telegram config from DB
     try:
         import json as _json
@@ -107,6 +121,8 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Failed to connect robot {robot_id} at {ip}: {e}")
 
+    await route_dispatcher.rebuild_from_db()
+
     # Start RTT logger
     rtt_logger = RTTLogger(db, robot_manager, interval=5.0)
     try:
@@ -131,6 +147,8 @@ async def lifespan(app: FastAPI):
         "mqtt_service": mqtt_service,
         "notifier": notifier,
         "rtt_logger": rtt_logger,
+        "route_dispatcher": route_dispatcher,
+        "route_service": route_service,
     })
 
     yield
@@ -151,7 +169,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-from routers import robots, buttons, bindings, logs, ws, monitor, settings, wifi, queue  # noqa: E402
+from routers import robots, buttons, bindings, logs, ws, monitor, settings, wifi, queue, routes  # noqa: E402
 app.include_router(robots.router, prefix="/api")
 app.include_router(buttons.router, prefix="/api")
 app.include_router(bindings.router, prefix="/api")
@@ -159,6 +177,7 @@ app.include_router(logs.router, prefix="/api")
 app.include_router(monitor.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(queue.router, prefix="/api")
+app.include_router(routes.router, prefix="/api")
 app.include_router(wifi.router, prefix="/api")
 app.include_router(ws.router)
 
