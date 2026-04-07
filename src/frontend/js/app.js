@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { ws } from './websocket.js';
 import { initRobots } from './robots.js';
+import { initRoutes } from './routes.js';
 import { initButtons } from './buttons.js';
 import { initBindings } from './bindings.js';
 import { initLogs } from './logs.js';
@@ -9,6 +10,7 @@ import { initWifi } from './wifi.js';
 
 const TAB_LABELS = {
     robots: '機器人',
+    routes: '路線',
     buttons: '按鈕',
     bindings: '動作設定',
     logs: '執行記錄',
@@ -88,6 +90,7 @@ api.getSystemInfo().then(info => {
 
 ws.connect();
 initRobots(ws);
+initRoutes(ws);
 initButtons(ws);
 initBindings();
 initLogs(ws);
