@@ -75,3 +75,34 @@ async def test_binding_unique_constraint(db):
             "INSERT INTO bindings (button_id, trigger, robot_id, action, params, enabled, created_at) "
             "VALUES (1, 'single', 'r1', 'speak', '{\"text\":\"hi\"}', 1, datetime('now'))"
         )
+
+
+@pytest.mark.asyncio
+async def test_v4_route_tables_exist(db):
+    async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='route_templates'") as c:
+        assert await c.fetchone() is not None
+    async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='route_runs'") as c:
+        assert await c.fetchone() is not None
+    async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='route_stop_logs'") as c:
+        assert await c.fetchone() is not None
+
+
+@pytest.mark.asyncio
+async def test_v4_route_templates_columns(db):
+    async with db.execute("PRAGMA table_info(route_templates)") as c:
+        cols = {row[1] for row in await c.fetchall()}
+    assert cols == {"id", "name", "pinned_robot_id", "stops", "default_timeout", "confirm_button_id", "created_at"}
+
+
+@pytest.mark.asyncio
+async def test_v4_route_runs_columns(db):
+    async with db.execute("PRAGMA table_info(route_runs)") as c:
+        cols = {row[1] for row in await c.fetchall()}
+    assert cols == {"id", "template_id", "robot_id", "stops", "default_timeout", "confirm_button_id", "status", "current_stop", "started_at", "completed_at"}
+
+
+@pytest.mark.asyncio
+async def test_v4_route_stop_logs_columns(db):
+    async with db.execute("PRAGMA table_info(route_stop_logs)") as c:
+        cols = {row[1] for row in await c.fetchall()}
+    assert cols == {"id", "run_id", "stop_index", "location_name", "arrived_at", "confirmed_at", "confirmed_by", "timed_out", "departed_at"}
