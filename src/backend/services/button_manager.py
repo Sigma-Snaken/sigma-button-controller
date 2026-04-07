@@ -25,6 +25,14 @@ class ButtonManager:
         self._db = db
         self._queue = command_queue
         self._ws = ws_manager
+        self._route_service = None
+        self._route_dispatcher = None
+
+    def set_route_service(self, route_service) -> None:
+        self._route_service = route_service
+
+    def set_route_dispatcher(self, route_dispatcher) -> None:
+        self._route_dispatcher = route_dispatcher
 
     async def handle_message(self, msg: dict) -> None:
         msg_type = msg.get("type")
@@ -98,6 +106,11 @@ class ButtonManager:
             "last_seen": now,
         })
 
+        # Route confirmation interception
+        if self._route_service and self._route_service.try_confirm(ieee):
+            logger.info(f"Button {ieee} confirmed route stop")
+            return
+
         async with self._db.execute(
             "SELECT id FROM buttons WHERE ieee_addr = ?", (ieee,)
         ) as cursor:
@@ -142,6 +155,25 @@ class ButtonManager:
                 "action": action,
                 "result": result,
             })
+        elif action == "start_route":
+            if self._route_dispatcher:
+                result = await self._route_dispatcher.dispatch(
+                    template_id=params.get("template_id"),
+                )
+                now = datetime.now(timezone.utc).isoformat()
+                await self._db.execute(
+                    "INSERT INTO action_logs (button_id, trigger, robot_id, action, params, "
+                    "result_ok, result_detail, executed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (button_id, trigger, robot_id, action, params_json,
+                     1 if result.get("ok") else 0, json.dumps(result), now),
+                )
+                await self._db.commit()
+                await self._ws.broadcast("action_executed", {
+                    "button_id": button_id, "trigger": trigger,
+                    "robot_id": robot_id, "action": action, "result": result,
+                })
+            else:
+                logger.warning("start_route action but no route dispatcher")
         else:
             await self._queue.enqueue(
                 robot_id, action, params,
