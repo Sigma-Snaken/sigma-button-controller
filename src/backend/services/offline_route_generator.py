@@ -85,20 +85,24 @@ def _disarm_imu():
 _REPORT_URL = PI_URL + "/api/routes/offline/report"
 
 
-def try_report(event, stop_index=None):
-    """HTTP POST event to Pi. Silent on failure."""
+def try_report(event, stop_index=None, retries=0):
+    """HTTP POST event to Pi. Silent on failure. Retries for terminal events."""
     payload = {{"run_id": RUN_ID, "event": event, "stop_index": stop_index,
                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")}}
-    try:
-        data = json.dumps(payload).encode()
-        req = urllib.request.Request(
-            _REPORT_URL, data=data,
-            headers={{"Content-Type": "application/json"}}, method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=5):
-            pass
-    except Exception:
-        pass
+    data = json.dumps(payload).encode()
+    attempts = 1 + retries
+    for attempt in range(attempts):
+        try:
+            req = urllib.request.Request(
+                _REPORT_URL, data=data,
+                headers={{"Content-Type": "application/json"}}, method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5):
+                return True
+        except Exception:
+            if attempt < attempts - 1:
+                time.sleep(10)
+    return False
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
@@ -153,12 +157,13 @@ def main():
         client.return_shelf(SHELF_NAME)
         print("[route_executor] Going home...", flush=True)
         client.return_home()
-        try_report("completed")
-        print(f"[route_executor] Route {{RUN_ID}} completed", flush=True)
+        print(f"[route_executor] Route {{RUN_ID}} completed, reporting...", flush=True)
+        try_report("completed", retries=6)  # retry up to 6 times (10s apart = ~1 min)
+        print(f"[route_executor] Done", flush=True)
 
     except Exception as exc:
         print(f"[route_executor] ERROR: {{exc}}", flush=True)
-        try_report("failed")
+        try_report("failed", retries=6)
         try:
             client.return_shelf(SHELF_NAME)
         except Exception:
