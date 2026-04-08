@@ -79,6 +79,93 @@ function buttonName(id) {
     return b ? (b.name || b.ieee_addr) : `#${id}`;
 }
 
+// ── Stop Picker (toggle buttons + drag reorder) ────────────────────
+
+function createStopPicker(containerEl, selectedStops) {
+    /**
+     * Renders a toggle-button grid of all locations (4 per row).
+     * Selected stops appear in a draggable ordered list below.
+     * Mutates `selectedStops` array in place.
+     * Returns { refresh() } to re-render.
+     */
+    function render() {
+        const selectedNames = new Set(selectedStops.map(s => s.name));
+        containerEl.innerHTML = `
+            <div class="loc-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.75rem">
+                ${_locations.map(l => {
+                    const active = selectedNames.has(l.name);
+                    const idx = active ? selectedStops.findIndex(s => s.name === l.name) + 1 : null;
+                    return `<button type="button" class="loc-toggle ${active ? 'loc-active' : ''}" data-name="${l.name}" style="
+                        position:relative;padding:0.45rem 0.3rem;border-radius:4px;font-size:0.78rem;cursor:pointer;
+                        font-family:var(--font-mono);text-align:center;transition:all 0.15s;
+                        border:1px solid ${active ? 'var(--amber)' : 'var(--border-medium)'};
+                        background:${active ? 'var(--amber-subtle)' : 'var(--panel-light)'};
+                        color:${active ? 'var(--amber)' : 'var(--text-secondary)'};
+                        font-weight:${active ? '600' : '400'};
+                    ">${active ? `<span style="position:absolute;top:2px;left:4px;font-size:0.6rem;color:var(--amber-dim)">${idx}</span>` : ''}${l.name}</button>`;
+                }).join('')}
+            </div>
+            <div class="stop-order" style="min-height:1.5rem">
+                ${selectedStops.length === 0
+                    ? '<p style="color:var(--text-muted);font-size:0.82rem">點選上方位置按鈕選擇停靠站</p>'
+                    : `<div style="display:flex;flex-wrap:wrap;gap:0.35rem">${selectedStops.map((s, i) => `<div class="stop-chip" draggable="true" data-idx="${i}" style="
+                        display:inline-flex;align-items:center;gap:0.3rem;padding:0.25rem 0.5rem;
+                        border-radius:3px;font-size:0.78rem;cursor:grab;user-select:none;
+                        background:var(--amber-subtle);border:1px solid var(--amber);color:var(--amber-dim);
+                    "><span style="font-weight:600;min-width:1rem">${i + 1}.</span><span>${s.name}</span></div>`).join('')}</div>`}
+            </div>`;
+
+        // Toggle click
+        containerEl.querySelectorAll('.loc-toggle').forEach(btn => {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                const name = btn.dataset.name;
+                const idx = selectedStops.findIndex(s => s.name === name);
+                if (idx >= 0) {
+                    selectedStops.splice(idx, 1);
+                } else {
+                    selectedStops.push({ name });
+                }
+                render();
+            };
+        });
+
+        // Drag reorder on chips
+        let dragIdx = null;
+        containerEl.querySelectorAll('.stop-chip').forEach(chip => {
+            chip.addEventListener('dragstart', (e) => {
+                dragIdx = parseInt(chip.dataset.idx);
+                chip.style.opacity = '0.4';
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            chip.addEventListener('dragend', () => {
+                chip.style.opacity = '1';
+                dragIdx = null;
+            });
+            chip.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                chip.style.borderColor = 'var(--amber-bright)';
+            });
+            chip.addEventListener('dragleave', () => {
+                chip.style.borderColor = 'var(--amber)';
+            });
+            chip.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const dropIdx = parseInt(chip.dataset.idx);
+                if (dragIdx !== null && dragIdx !== dropIdx) {
+                    const [moved] = selectedStops.splice(dragIdx, 1);
+                    selectedStops.splice(dropIdx, 0, moved);
+                    render();
+                }
+            });
+        });
+    }
+
+    render();
+    return { refresh: render };
+}
+
 // ── Full Render ──────────────────────────────────────────────────────
 
 async function renderAll() {
@@ -174,15 +261,8 @@ function openTemplateModal(existing) {
             ${_buttons.map(b => `<option value="${b.id}" ${existing && String(existing.confirm_button_id) === String(b.id) ? 'selected' : ''}>${b.name || b.ieee_addr}</option>`).join('')}
         </select></div>
         <div class="form-group"><label>預設超時 (秒)</label><input id="tpl-timeout" type="number" value="${existing ? existing.default_timeout : 120}" min="1"></div>
-        <div class="form-group"><label>停靠站</label>
-            <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
-                <select id="tpl-loc-select" style="flex:1">
-                    <option value="">-- 選擇位置 --</option>
-                    ${_locations.map(l => `<option value="${l.name}">${l.name}</option>`).join('')}
-                </select>
-                <button class="btn btn-sm btn-primary" id="tpl-add-stop">加入</button>
-            </div>
-            <div id="tpl-stop-list"></div>
+        <div class="form-group"><label>停靠站 <span style="color:var(--text-muted);font-weight:400">(點選選擇，拖拉排序)</span></label>
+            <div id="tpl-stop-picker"></div>
         </div>`;
 
     const overlay = showModal(title, bodyHtml, async (ol) => {
@@ -210,36 +290,9 @@ function openTemplateModal(existing) {
         } catch (e) { showToast(e.message, 'error'); }
     });
 
-    // Wire up stop list management inside the modal
-    const renderStopList = () => {
-        const list = overlay.querySelector('#tpl-stop-list');
-        if (!list) return;
-        list.innerHTML = stops.length === 0
-            ? '<p style="color:var(--text-muted);font-size:0.82rem">尚未新增停靠站</p>'
-            : stops.map((s, i) => `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem">
-                <span style="color:var(--amber);font-weight:600;min-width:1.5rem">${i + 1}.</span>
-                <span style="flex:1">${s.name}</span>
-                <button class="btn btn-sm btn-danger tpl-rm-stop" data-idx="${i}">移除</button>
-            </div>`).join('');
-        list.querySelectorAll('.tpl-rm-stop').forEach(btn => {
-            btn.onclick = (e) => {
-                e.preventDefault();
-                stops.splice(parseInt(btn.dataset.idx), 1);
-                renderStopList();
-            };
-        });
-    };
-
-    overlay.querySelector('#tpl-add-stop').onclick = (e) => {
-        e.preventDefault();
-        const sel = overlay.querySelector('#tpl-loc-select');
-        if (!sel.value) return;
-        stops.push({ name: sel.value });
-        sel.value = '';
-        renderStopList();
-    };
-
-    renderStopList();
+    // Wire up stop picker (toggle buttons + drag reorder)
+    const pickerEl = overlay.querySelector('#tpl-stop-picker');
+    if (pickerEl) createStopPicker(pickerEl, stops);
 }
 
 // ── Quick Dispatch Section ───────────────────────────────────────────
@@ -248,17 +301,12 @@ async function renderQuickDispatch() {
     const section = container.querySelector('#rt-dispatch');
     if (!section) return;
 
+    let qdStops = [];
+
     section.innerHTML = `<div class="card">
         <div class="card-header"><h2>快速派遣</h2></div>
-        <div class="form-group"><label>停靠站 (多選)</label>
-            <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
-                <select id="qd-loc-select" style="flex:1">
-                    <option value="">-- 選擇位置 --</option>
-                    ${_locations.map(l => `<option value="${l.name}">${l.name}</option>`).join('')}
-                </select>
-                <button class="btn btn-sm btn-primary" id="qd-add-stop">加入</button>
-            </div>
-            <div id="qd-stop-list"><p style="color:var(--text-muted);font-size:0.82rem">尚未新增停靠站</p></div>
+        <div class="form-group"><label>停靠站 <span style="color:var(--text-muted);font-weight:400">(點選選擇，拖拉排序)</span></label>
+            <div id="qd-stop-picker"></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
             <div class="form-group"><label>搬運貨架</label><select id="qd-shelf">
@@ -278,33 +326,8 @@ async function renderQuickDispatch() {
         <div style="text-align:right"><button class="btn btn-primary" id="qd-go">立即出發</button></div>
     </div>`;
 
-    let qdStops = [];
-
-    const renderQdStops = () => {
-        const list = section.querySelector('#qd-stop-list');
-        if (!list) return;
-        list.innerHTML = qdStops.length === 0
-            ? '<p style="color:var(--text-muted);font-size:0.82rem">尚未新增停靠站</p>'
-            : qdStops.map((s, i) => `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem">
-                <span style="color:var(--amber);font-weight:600;min-width:1.5rem">${i + 1}.</span>
-                <span style="flex:1">${s.name}</span>
-                <button class="btn btn-sm btn-danger qd-rm" data-idx="${i}">移除</button>
-            </div>`).join('');
-        list.querySelectorAll('.qd-rm').forEach(btn => {
-            btn.onclick = () => {
-                qdStops.splice(parseInt(btn.dataset.idx), 1);
-                renderQdStops();
-            };
-        });
-    };
-
-    section.querySelector('#qd-add-stop').onclick = () => {
-        const sel = section.querySelector('#qd-loc-select');
-        if (!sel.value) return;
-        qdStops.push({ name: sel.value });
-        sel.value = '';
-        renderQdStops();
-    };
+    const qdPickerEl = section.querySelector('#qd-stop-picker');
+    if (qdPickerEl) createStopPicker(qdPickerEl, qdStops);
 
     section.querySelector('#qd-go').onclick = async () => {
         if (qdStops.length === 0) { showToast('請至少新增一個停靠站', 'error'); return; }
@@ -319,8 +342,8 @@ async function renderQuickDispatch() {
         try {
             await api.dispatchRoute(data);
             showToast('路線已派遣');
-            qdStops = [];
-            renderQdStops();
+            qdStops.length = 0;
+            qdPickerEl && createStopPicker(qdPickerEl, qdStops);
             await renderActiveRuns();
         } catch (e) { showToast(e.message, 'error'); }
     };
