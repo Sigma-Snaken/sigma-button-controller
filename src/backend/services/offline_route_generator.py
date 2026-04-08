@@ -101,30 +101,13 @@ def try_report(event, stop_index=None):
         pass
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _poll_until_done(timeout=120):
-    """Block until the current robot command finishes."""
-    deadline = time.time() + timeout
-    time.sleep(1.0)
-    while time.time() < deadline:
-        try:
-            state = client.get_command_state()
-            # state has .state attribute: 0=PENDING, 1=RUNNING, etc.
-            # When no command is running, command_id is empty
-            if not state.command_id:
-                return True
-        except Exception:
-            pass
-        time.sleep(1.0)
-    return False
-
-
 # ── Main ───────────────────────────────────────────────────────────────────────
+# NOTE: kachaka-api SDK move_shelf/return_shelf/return_home are BLOCKING calls
+# (they wait until the command completes before returning). No extra polling needed.
 
 def main():
-    print(f"[route_executor] Starting route {{RUN_ID}}")
-    print(f"[route_executor] Shelf: {{SHELF_NAME}}, Stops: {{len(STOPS)}}")
+    print(f"[route_executor] Starting route {{RUN_ID}}", flush=True)
+    print(f"[route_executor] Shelf: {{SHELF_NAME}}, Stops: {{len(STOPS)}}", flush=True)
 
     # Initialize name->ID resolver (required before name-based commands)
     print("[route_executor] Initializing resolver...", flush=True)
@@ -138,17 +121,18 @@ def main():
         for i, stop in enumerate(STOPS):
             stop_name = stop["name"]
             timeout_sec = stop.get("timeout_sec") or DEFAULT_TIMEOUT
-            print(f"[route_executor] Stop {{i+1}}/{{len(STOPS)}}: {{stop_name}}")
+            print(f"[route_executor] Stop {{i+1}}/{{len(STOPS)}}: {{stop_name}}", flush=True)
 
-            # Move shelf to stop
+            # Move shelf to stop (blocking — waits until arrival)
             try_report("moving", i)
-            client.move_shelf(SHELF_NAME, stop_name)
-            _poll_until_done()
+            print(f"[route_executor] Moving shelf to {{stop_name}}...", flush=True)
+            result = client.move_shelf(SHELF_NAME, stop_name)
+            print(f"[route_executor] move_shelf returned: {{result}}", flush=True)
             try_report("arrived", i)
 
             # Announce arrival
             client.speak("到站，請取貨")
-            print(f"[route_executor] Waiting for shake or timeout ({{timeout_sec}}s)")
+            print(f"[route_executor] Waiting for shake or timeout ({{timeout_sec}}s)", flush=True)
 
             # Arm IMU with 2s settle delay, then wait
             _arm_imu(settle_delay=2.0)
@@ -156,34 +140,31 @@ def main():
             _disarm_imu()
 
             if shook:
-                print(f"[route_executor] Shake confirmed at {{stop_name}}")
+                print(f"[route_executor] Shake confirmed at {{stop_name}}", flush=True)
                 try_report("shake_confirmed", i)
             else:
-                print(f"[route_executor] Timeout at {{stop_name}}")
+                print(f"[route_executor] Timeout at {{stop_name}}", flush=True)
                 client.speak("超時，即將前往下一站")
                 try_report("timeout", i)
                 time.sleep(2.0)
 
-        # Return shelf and go home
-        print("[route_executor] Returning shelf and going home")
+        # Return shelf and go home (both blocking)
+        print("[route_executor] Returning shelf...", flush=True)
         client.return_shelf(SHELF_NAME)
-        _poll_until_done(timeout=60)
+        print("[route_executor] Going home...", flush=True)
         client.return_home()
-        _poll_until_done(timeout=60)
         try_report("completed")
-        print(f"[route_executor] Route {{RUN_ID}} completed")
+        print(f"[route_executor] Route {{RUN_ID}} completed", flush=True)
 
     except Exception as exc:
-        print(f"[route_executor] ERROR: {{exc}}")
+        print(f"[route_executor] ERROR: {{exc}}", flush=True)
         try_report("failed")
         try:
             client.return_shelf(SHELF_NAME)
-            _poll_until_done(timeout=60)
         except Exception:
             pass
         try:
             client.return_home()
-            _poll_until_done(timeout=60)
         except Exception:
             pass
     finally:
