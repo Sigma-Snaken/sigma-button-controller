@@ -33,7 +33,7 @@ GYRO_THRESHOLD = 0.8     # rad/s
 _imu_armed = False
 _imu_lock = threading.Lock()
 _shake_event = threading.Event()
-_imu_samples = []           # ring buffer, max 3 recent samples
+_imu_samples = []
 _imu_thread_stop = threading.Event()
 
 
@@ -42,15 +42,12 @@ def _imu_worker():
     while not _imu_thread_stop.is_set():
         try:
             imu = client.get_ros_imu()
-            ax = imu.linear_acceleration.x
-            ay = imu.linear_acceleration.y
-            az = imu.linear_acceleration.z
-            gx = imu.angular_velocity.x
-            gy = imu.angular_velocity.y
-            gz = imu.angular_velocity.z
-
-            accel_mag = (ax ** 2 + ay ** 2 + az ** 2) ** 0.5
-            gyro_mag = (gx ** 2 + gy ** 2 + gz ** 2) ** 0.5
+            accel_mag = (imu.linear_acceleration.x ** 2
+                         + imu.linear_acceleration.y ** 2
+                         + imu.linear_acceleration.z ** 2) ** 0.5
+            gyro_mag = (imu.angular_velocity.x ** 2
+                        + imu.angular_velocity.y ** 2
+                        + imu.angular_velocity.z ** 2) ** 0.5
             exceeded = (accel_mag > ACCEL_THRESHOLD) or (gyro_mag > GYRO_THRESHOLD)
 
             with _imu_lock:
@@ -67,7 +64,7 @@ def _imu_worker():
         time.sleep(0.1)
 
 
-def _arm_imu(settle_delay: float = 2.0):
+def _arm_imu(settle_delay=2.0):
     global _imu_armed
     _shake_event.clear()
     with _imu_lock:
@@ -88,18 +85,15 @@ def _disarm_imu():
 _REPORT_URL = PI_URL + "/api/routes/offline/report"
 
 
-def try_report(event: str, extra: dict | None = None):
+def try_report(event, stop_index=None):
     """HTTP POST event to Pi. Silent on failure."""
-    payload = {{"run_id": RUN_ID, "event": event}}
-    if extra:
-        payload.update(extra)
+    payload = {{"run_id": RUN_ID, "event": event, "stop_index": stop_index,
+               "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")}}
     try:
         data = json.dumps(payload).encode()
         req = urllib.request.Request(
-            _REPORT_URL,
-            data=data,
-            headers={{"Content-Type": "application/json"}},
-            method="POST",
+            _REPORT_URL, data=data,
+            headers={{"Content-Type": "application/json"}}, method="POST",
         )
         with urllib.request.urlopen(req, timeout=5):
             pass
@@ -109,81 +103,84 @@ def try_report(event: str, extra: dict | None = None):
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _resolve_shelf():
-    """Return the shelf object matching SHELF_NAME."""
-    shelves = client.get_shelves()
-    for s in shelves:
-        if s.name == SHELF_NAME:
-            return s
-    raise RuntimeError(f"Shelf not found: {{SHELF_NAME!r}}")
-
-
-def _poll_until_done():
+def _poll_until_done(timeout=120):
     """Block until the current robot command finishes."""
-    while True:
-        result = client.get_last_command_result()
-        state = client.get_command_state()
-        # state 0 = UNSPECIFIED/idle, 3 = SUCCEEDED, 4 = FAILED, 5 = CANCELLED
-        if state in (0, 3, 4, 5):
-            return result
-        time.sleep(0.5)
+    deadline = time.time() + timeout
+    time.sleep(1.0)
+    while time.time() < deadline:
+        try:
+            state = client.get_command_state()
+            # state has .state attribute: 0=PENDING, 1=RUNNING, etc.
+            # When no command is running, command_id is empty
+            if not state.command_id:
+                return True
+        except Exception:
+            pass
+        time.sleep(1.0)
+    return False
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
+    print(f"[route_executor] Starting route {{RUN_ID}}")
+    print(f"[route_executor] Shelf: {{SHELF_NAME}}, Stops: {{len(STOPS)}}")
+
     imu_thread = threading.Thread(target=_imu_worker, daemon=True)
     imu_thread.start()
 
-    shelf = _resolve_shelf()
-
     try:
-        for stop in STOPS:
+        for i, stop in enumerate(STOPS):
             stop_name = stop["name"]
-            timeout_sec = stop.get("timeout_sec", DEFAULT_TIMEOUT)
+            timeout_sec = stop.get("timeout_sec") or DEFAULT_TIMEOUT
+            print(f"[route_executor] Stop {{i+1}}/{{len(STOPS)}}: {{stop_name}}")
 
             # Move shelf to stop
-            try_report("moving", {{"stop": stop_name}})
-            client.move_shelf(shelf.id, stop_name)
+            try_report("moving", i)
+            client.move_shelf(SHELF_NAME, stop_name)
             _poll_until_done()
+            try_report("arrived", i)
 
-            try_report("arrived", {{"stop": stop_name}})
+            # Announce arrival
             client.speak("到站，請取貨")
+            print(f"[route_executor] Waiting for shake or timeout ({{timeout_sec}}s)")
 
-            # Arm IMU with 2s settle delay
+            # Arm IMU with 2s settle delay, then wait
             _arm_imu(settle_delay=2.0)
-            try_report("shake_confirmed", {{"stop": stop_name}}) if False else None  # placeholder
-
-            # Wait for shake or timeout
             shook = _shake_event.wait(timeout=timeout_sec)
             _disarm_imu()
 
             if shook:
-                try_report("shake_confirmed", {{"stop": stop_name}})
+                print(f"[route_executor] Shake confirmed at {{stop_name}}")
+                try_report("shake_confirmed", i)
             else:
+                print(f"[route_executor] Timeout at {{stop_name}}")
                 client.speak("超時，即將前往下一站")
-                try_report("timeout", {{"stop": stop_name}})
+                try_report("timeout", i)
+                time.sleep(2.0)
 
         # Return shelf and go home
-        client.return_shelf(shelf.id)
-        _poll_until_done()
+        print("[route_executor] Returning shelf and going home")
+        client.return_shelf(SHELF_NAME)
+        _poll_until_done(timeout=60)
         client.return_home()
-        _poll_until_done()
+        _poll_until_done(timeout=60)
         try_report("completed")
+        print(f"[route_executor] Route {{RUN_ID}} completed")
 
     except Exception as exc:
-        try_report("failed", {{"error": str(exc)}})
+        print(f"[route_executor] ERROR: {{exc}}")
+        try_report("failed")
         try:
-            client.return_shelf(shelf.id)
-            _poll_until_done()
+            client.return_shelf(SHELF_NAME)
+            _poll_until_done(timeout=60)
         except Exception:
             pass
         try:
             client.return_home()
-            _poll_until_done()
+            _poll_until_done(timeout=60)
         except Exception:
             pass
-        raise
     finally:
         _imu_thread_stop.set()
         imu_thread.join(timeout=2.0)
