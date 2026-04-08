@@ -30,9 +30,23 @@ class RouteDispatcher:
         self._last_assigned: str | None = None
         self._queue: list[str] = []
         self._active: dict[str, str] = {}
+        self._generator = None
+        self._deployer = None
+        self._route_mode = "online"
+        self._pi_url = ""
 
     def set_route_service(self, svc: RouteService) -> None:
         self._route_service = svc
+
+    def set_offline_components(self, generator, deployer) -> None:
+        self._generator = generator
+        self._deployer = deployer
+
+    def set_route_mode(self, mode: str) -> None:
+        self._route_mode = mode
+
+    def set_pi_url(self, url: str) -> None:
+        self._pi_url = url
 
     async def dispatch(
         self,
@@ -75,7 +89,40 @@ class RouteDispatcher:
         )
         await self._db.commit()
 
-        if robot_id:
+        if robot_id and self._route_mode == "offline" and self._generator and self._deployer:
+            # Offline path: generate script and deploy via SSH
+            self._active[robot_id] = run_id
+            self._last_assigned = robot_id
+            robot_svc = self._rm.get(robot_id)
+            robot_ip = getattr(robot_svc, 'ip', None) or robot_id
+
+            script = self._generator.generate(
+                run_id=run_id,
+                stops=stops,
+                shelf_name=shelf_name or "",
+                default_timeout=default_timeout,
+                pi_url=self._pi_url,
+            )
+
+            deploy_result = await self._deployer.deploy(robot_ip, script, run_id)
+            if deploy_result.get("ok"):
+                await self._db.execute(
+                    "UPDATE route_runs SET status = 'offline_running', execution_mode = 'offline' WHERE id = ?",
+                    (run_id,),
+                )
+                await self._db.commit()
+                await self._ws.broadcast("route:offline_started", {"run_id": run_id, "robot_id": robot_id})
+                return {"ok": True, "run_id": run_id, "robot_id": robot_id, "status": "offline_running"}
+            else:
+                self._active.pop(robot_id, None)
+                await self._db.execute(
+                    "UPDATE route_runs SET status = 'failed', completed_at = ? WHERE id = ?",
+                    (datetime.now(timezone.utc).isoformat(), run_id),
+                )
+                await self._db.commit()
+                return {"ok": False, "error": deploy_result.get("error", "Deploy failed")}
+
+        elif robot_id:
             self._active[robot_id] = run_id
             self._last_assigned = robot_id
             logger.info(f"Route {run_id} assigned to {robot_id}")
