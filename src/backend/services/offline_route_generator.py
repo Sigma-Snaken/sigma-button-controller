@@ -126,6 +126,11 @@ def main():
     print(f"[route_executor] Starting route {{RUN_ID}}")
     print(f"[route_executor] Shelf: {{SHELF_NAME}}, Stops: {{len(STOPS)}}")
 
+    # Initialize name->ID resolver (required before name-based commands)
+    print("[route_executor] Initializing resolver...", flush=True)
+    client.update_resolver()
+    print("[route_executor] Resolver ready", flush=True)
+
     imu_thread = threading.Thread(target=_imu_worker, daemon=True)
     imu_thread.start()
 
