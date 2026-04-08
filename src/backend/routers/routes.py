@@ -265,3 +265,79 @@ async def dispatcher_status():
     if not dispatcher:
         raise HTTPException(503, "Route dispatcher not available")
     return dispatcher.get_status()
+
+
+# ── Offline report ───────────────────────────────────────────────────
+
+class OfflineReport(BaseModel):
+    run_id: str
+    event: str  # moving, arrived, shake_confirmed, timeout, completed, failed
+    stop_index: int | None = None
+    timestamp: str | None = None
+
+
+async def _handle_offline_report(db, ws_manager, run_id, event, stop_index, timestamp):
+    # Verify run exists
+    async with db.execute(
+        "SELECT stops FROM route_runs WHERE id = ?", (run_id,)
+    ) as cursor:
+        row = await cursor.fetchone()
+    if not row:
+        return {"ok": False, "error": "Run not found"}
+
+    now = timestamp or datetime.now(timezone.utc).isoformat()
+
+    if event == "moving" and stop_index is not None:
+        await db.execute(
+            "UPDATE route_runs SET current_stop = ?, status = 'offline_running' WHERE id = ?",
+            (stop_index, run_id),
+        )
+    elif event == "arrived" and stop_index is not None:
+        stops = json.loads(row[0])
+        location_name = stops[stop_index]["name"] if stop_index < len(stops) else ""
+        await db.execute(
+            "INSERT INTO route_stop_logs (run_id, stop_index, location_name, arrived_at, timed_out, departed_at) "
+            "VALUES (?, ?, ?, ?, 0, ?)",
+            (run_id, stop_index, location_name, now, now),
+        )
+    elif event == "shake_confirmed" and stop_index is not None:
+        await db.execute(
+            "UPDATE route_stop_logs SET confirmed_at = ?, confirmed_by = 'imu_shake' "
+            "WHERE run_id = ? AND stop_index = ?",
+            (now, run_id, stop_index),
+        )
+    elif event == "timeout" and stop_index is not None:
+        await db.execute(
+            "UPDATE route_stop_logs SET timed_out = 1, departed_at = ? "
+            "WHERE run_id = ? AND stop_index = ?",
+            (now, run_id, stop_index),
+        )
+    elif event == "completed":
+        await db.execute(
+            "UPDATE route_runs SET status = 'completed', completed_at = ? WHERE id = ?",
+            (now, run_id),
+        )
+    elif event == "failed":
+        await db.execute(
+            "UPDATE route_runs SET status = 'failed', completed_at = ? WHERE id = ?",
+            (now, run_id),
+        )
+
+    await db.commit()
+
+    if ws_manager:
+        await ws_manager.broadcast("route:offline_report", {
+            "run_id": run_id,
+            "event": event,
+            "stop_index": stop_index,
+            "timestamp": now,
+        })
+
+    return {"ok": True}
+
+
+@router.post("/routes/offline/report")
+async def offline_report(body: OfflineReport):
+    db = _state["db"]
+    ws = _state.get("ws_manager")
+    return await _handle_offline_report(db, ws, body.run_id, body.event, body.stop_index, body.timestamp)
