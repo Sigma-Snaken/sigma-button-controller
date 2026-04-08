@@ -341,3 +341,35 @@ async def offline_report(body: OfflineReport):
     db = _state["db"]
     ws = _state.get("ws_manager")
     return await _handle_offline_report(db, ws, body.run_id, body.event, body.stop_index, body.timestamp)
+
+
+class SSHTestRequest(BaseModel):
+    robot_id: str
+
+
+@router.post("/routes/offline/test-ssh")
+async def test_ssh(body: SSHTestRequest):
+    deployer = _state.get("offline_deployer")
+    if not deployer:
+        raise HTTPException(503, "Offline deployer not available")
+    rm = _state.get("robot_manager")
+    if not rm:
+        raise HTTPException(503, "Robot manager not available")
+    robot_svc = rm.get(body.robot_id)
+    if not robot_svc:
+        raise HTTPException(404, f"Robot '{body.robot_id}' not found")
+    robot_ip = getattr(robot_svc, 'ip', None)
+    if not robot_ip:
+        raise HTTPException(400, "Robot has no IP")
+    return await deployer.test_connection(robot_ip)
+
+
+@router.get("/routes/offline/public-key")
+async def get_public_key():
+    deployer = _state.get("offline_deployer")
+    if not deployer:
+        raise HTTPException(503, "Offline deployer not available")
+    key = deployer.get_public_key()
+    if not key:
+        raise HTTPException(404, "No SSH public key found on this server")
+    return {"public_key": key}

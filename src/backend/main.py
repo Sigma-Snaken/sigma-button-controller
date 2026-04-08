@@ -18,6 +18,8 @@ from services.notifier import TelegramNotifier
 from services.rtt_logger import RTTLogger
 from services.route_dispatcher import RouteDispatcher
 from services.route_service import RouteService
+from services.offline_route_generator import OfflineRouteGenerator
+from services.offline_deployer import OfflineDeployer
 from utils.logger import get_logger
 
 logger = get_logger("main")
@@ -85,6 +87,19 @@ async def lifespan(app: FastAPI):
     button_manager.set_route_service(route_service)
     button_manager.set_route_dispatcher(route_dispatcher)
 
+    offline_generator = OfflineRouteGenerator()
+    offline_deployer = OfflineDeployer()
+    route_dispatcher.set_offline_components(offline_generator, offline_deployer)
+
+    # Load route_mode from DB
+    try:
+        async with db.execute("SELECT value FROM settings WHERE key = 'route_mode'") as cursor:
+            row = await cursor.fetchone()
+        if row:
+            route_dispatcher.set_route_mode(row[0])
+    except Exception:
+        pass
+
     # Load telegram config from DB
     try:
         import json as _json
@@ -149,7 +164,20 @@ async def lifespan(app: FastAPI):
         "rtt_logger": rtt_logger,
         "route_dispatcher": route_dispatcher,
         "route_service": route_service,
+        "offline_deployer": offline_deployer,
     })
+
+    # Set Pi URL for offline route reports
+    try:
+        import httpx as _httpx
+        wifi_url = os.environ.get("WIFI_AGENT_URL", "http://host.docker.internal:8001")
+        async with _httpx.AsyncClient(timeout=2) as client:
+            resp = await client.get(f"{wifi_url}/status")
+            data = resp.json()
+            ip = data.get("ip") or data.get("eth_ip") or "localhost"
+            route_dispatcher.set_pi_url(f"http://{ip}:8000")
+    except Exception:
+        route_dispatcher.set_pi_url("http://localhost:8000")
 
     yield
 

@@ -2,7 +2,7 @@ import json
 import os
 
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from main import _state
@@ -145,5 +145,39 @@ async def update_queue_settings(body: ToggleConfig):
     if queue:
         queue.set_enabled(enabled)
     return {"ok": True, "enabled": enabled}
+
+
+@router.get("/settings/route-mode")
+async def get_route_mode():
+    db = _state["db"]
+    mode = "online"  # default
+    async with db.execute(
+        "SELECT value FROM settings WHERE key = 'route_mode'"
+    ) as cursor:
+        row = await cursor.fetchone()
+    if row:
+        mode = row[0]
+    return {"mode": mode}
+
+
+class RouteModeConfig(BaseModel):
+    mode: str  # "online" or "offline"
+
+
+@router.put("/settings/route-mode")
+async def update_route_mode(body: RouteModeConfig):
+    if body.mode not in ("online", "offline"):
+        raise HTTPException(400, "Mode must be 'online' or 'offline'")
+    db = _state["db"]
+    await db.execute(
+        "INSERT INTO settings (key, value) VALUES ('route_mode', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (body.mode,),
+    )
+    await db.commit()
+    dispatcher = _state.get("route_dispatcher")
+    if dispatcher:
+        dispatcher.set_route_mode(body.mode)
+    return {"ok": True, "mode": body.mode}
 
 
