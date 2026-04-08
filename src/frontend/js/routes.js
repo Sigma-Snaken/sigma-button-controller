@@ -43,20 +43,27 @@ function fmtShortTime(iso) {
     return new Date(iso).toLocaleTimeString('zh-TW', { hour12: false });
 }
 
+let _shelves = [];
+
 async function loadMeta() {
     try {
         const [robots, buttons] = await Promise.all([api.listRobots(), api.listButtons()]);
         _robots = robots;
         _buttons = buttons;
-        // Gather locations from first online robot
+        // Gather locations + shelves from first online robot
         const online = robots.find(r => r.online);
         if (online) {
             try {
                 const d = await api.getLocations(online.id);
                 _locations = d.locations || [];
             } catch { _locations = []; }
+            try {
+                const d = await api.getShelves(online.id);
+                _shelves = d.shelves || [];
+            } catch { _shelves = []; }
         } else {
             _locations = [];
+            _shelves = [];
         }
     } catch { /* ignore */ }
 }
@@ -154,6 +161,10 @@ function openTemplateModal(existing) {
 
     const bodyHtml = `
         <div class="form-group"><label>名稱</label><input id="tpl-name" value="${existing ? existing.name : ''}"></div>
+        <div class="form-group"><label>搬運貨架</label><select id="tpl-shelf">
+            <option value="">-- 選擇貨架 --</option>
+            ${_shelves.map(s => `<option value="${s.name}" ${existing && existing.shelf_name === s.name ? 'selected' : ''}>${s.name}</option>`).join('')}
+        </select></div>
         <div class="form-group"><label>綁定機器人</label><select id="tpl-robot">
             <option value="">自動派遣 (Round-Robin)</option>
             ${_robots.map(r => `<option value="${r.id}" ${existing && existing.pinned_robot_id === r.id ? 'selected' : ''}>${r.name}</option>`).join('')}
@@ -178,12 +189,14 @@ function openTemplateModal(existing) {
         const name = ol.querySelector('#tpl-name').value.trim();
         if (!name) { showToast('請輸入名稱', 'error'); return; }
         if (stops.length === 0) { showToast('請至少新增一個停靠站', 'error'); return; }
+        if (!ol.querySelector('#tpl-shelf').value) { showToast('請選擇搬運貨架', 'error'); return; }
         const data = {
             name,
             stops: stops.map(s => ({ name: s.name })),
             default_timeout: parseInt(ol.querySelector('#tpl-timeout').value) || 120,
             pinned_robot_id: ol.querySelector('#tpl-robot').value || null,
             confirm_button_id: ol.querySelector('#tpl-confirm').value ? parseInt(ol.querySelector('#tpl-confirm').value) : null,
+            shelf_name: ol.querySelector('#tpl-shelf').value || null,
         };
         try {
             if (isEdit) {
@@ -247,7 +260,11 @@ async function renderQuickDispatch() {
             </div>
             <div id="qd-stop-list"><p style="color:var(--text-muted);font-size:0.82rem">尚未新增停靠站</p></div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+            <div class="form-group"><label>搬運貨架</label><select id="qd-shelf">
+                <option value="">-- 選擇貨架 --</option>
+                ${_shelves.map(s => `<option value="${s.name}">${s.name}</option>`).join('')}
+            </select></div>
             <div class="form-group"><label>超時 (秒)</label><input id="qd-timeout" type="number" value="120" min="1"></div>
             <div class="form-group"><label>確認按鈕</label><select id="qd-confirm">
                 <option value="">無 (純超時)</option>
@@ -291,11 +308,13 @@ async function renderQuickDispatch() {
 
     section.querySelector('#qd-go').onclick = async () => {
         if (qdStops.length === 0) { showToast('請至少新增一個停靠站', 'error'); return; }
+        if (!section.querySelector('#qd-shelf').value) { showToast('請選擇搬運貨架', 'error'); return; }
         const data = {
             stops: qdStops.map(s => ({ name: s.name })),
             default_timeout: parseInt(section.querySelector('#qd-timeout').value) || 120,
             confirm_button_id: section.querySelector('#qd-confirm').value ? parseInt(section.querySelector('#qd-confirm').value) : null,
             pinned_robot_id: section.querySelector('#qd-robot').value || null,
+            shelf_name: section.querySelector('#qd-shelf').value || null,
         };
         try {
             await api.dispatchRoute(data);

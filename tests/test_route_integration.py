@@ -98,6 +98,7 @@ async def test_full_route_lifecycle(setup):
     result = await dispatcher.dispatch(
         stops=[{"name": "A"}, {"name": "B"}],
         default_timeout=1,
+        shelf_name="ShelfX",
     )
     assert result["ok"] is True
     run_id = result["run_id"]
@@ -105,14 +106,17 @@ async def test_full_route_lifecycle(setup):
     # Wait for the full route to complete (2 stops x 1s timeout + move time + cleanup)
     await asyncio.sleep(5.0)
 
-    # Verify executor calls: move_to_location for A and B, then return_shelf + return_home
+    # Verify executor calls: move_shelf for A and B, then return_shelf + return_home
     actions = [c[1] for c in executor.calls]
-    move_calls = [c for c in executor.calls if c[1] == "move_to_location"]
+    move_calls = [c for c in executor.calls if c[1] == "move_shelf"]
     assert len(move_calls) == 2
-    assert move_calls[0][2] == {"name": "A"}
-    assert move_calls[1][2] == {"name": "B"}
+    assert move_calls[0][2] == {"shelf": "ShelfX", "location": "A"}
+    assert move_calls[1][2] == {"shelf": "ShelfX", "location": "B"}
     assert "return_shelf" in actions
     assert "return_home" in actions
+    # Verify return_shelf has shelf name
+    return_calls = [c for c in executor.calls if c[1] == "return_shelf"]
+    assert return_calls[0][2] == {"shelf": "ShelfX"}
 
     # Verify 2 timeout notifications sent (one per stop)
     assert len(notifier.messages) == 2
@@ -146,10 +150,12 @@ async def test_round_robin_two_routes(setup):
     r1 = await dispatcher.dispatch(
         stops=[{"name": "A"}],
         default_timeout=1,
+        shelf_name="ShelfX",
     )
     r2 = await dispatcher.dispatch(
         stops=[{"name": "B"}],
         default_timeout=1,
+        shelf_name="ShelfY",
     )
     assert r1["ok"] is True
     assert r2["ok"] is True
@@ -174,7 +180,7 @@ class SlowExecutor:
 
     async def execute(self, robot_id, action, params):
         self.calls.append((robot_id, action, params))
-        if action == "move_to_location":
+        if action in ("move_to_location", "move_shelf"):
             await asyncio.sleep(2.0)
         return {"ok": True}
 
@@ -191,14 +197,17 @@ async def test_queue_and_dequeue(setup):
     r1 = await dispatcher.dispatch(
         stops=[{"name": "A"}],
         default_timeout=1,
+        shelf_name="ShelfX",
     )
     r2 = await dispatcher.dispatch(
         stops=[{"name": "B"}],
         default_timeout=1,
+        shelf_name="ShelfY",
     )
     r3 = await dispatcher.dispatch(
         stops=[{"name": "C"}],
         default_timeout=1,
+        shelf_name="ShelfX",
     )
 
     assert r1["robot_id"] == "r1"

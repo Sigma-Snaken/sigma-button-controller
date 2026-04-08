@@ -102,6 +102,11 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_stop_logs_run ON route_stop_logs(run_id);
     """,
+    # V5: Add shelf_name to route tables
+    """
+    ALTER TABLE route_templates ADD COLUMN shelf_name TEXT;
+    ALTER TABLE route_runs ADD COLUMN shelf_name TEXT;
+    """,
 ]
 
 

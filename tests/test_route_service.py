@@ -79,11 +79,11 @@ async def setup(tmp_path):
     await disconnect()
 
 
-async def _insert_run(db, run_id, stops, robot_id="r1", default_timeout=2, confirm_button_id=None):
+async def _insert_run(db, run_id, stops, robot_id="r1", default_timeout=2, confirm_button_id=None, shelf_name="TestShelf"):
     await db.execute(
         "INSERT INTO route_runs (id, robot_id, stops, default_timeout, confirm_button_id, "
-        "status, current_stop) VALUES (?, ?, ?, ?, ?, 'assigned', -1)",
-        (run_id, robot_id, json.dumps(stops), default_timeout, confirm_button_id),
+        "shelf_name, status, current_stop) VALUES (?, ?, ?, ?, ?, ?, 'assigned', -1)",
+        (run_id, robot_id, json.dumps(stops), default_timeout, confirm_button_id, shelf_name),
     )
     await db.commit()
 
@@ -96,10 +96,17 @@ async def test_run_completes_all_stops_with_timeout(setup):
     await svc.start_run("run-1", "r1")
     await asyncio.sleep(3.0)
     actions = [c[1] for c in executor.calls]
-    assert actions[0] == "move_to_location"
-    assert actions[1] == "move_to_location"
+    assert actions[0] == "move_shelf"
+    assert actions[1] == "move_shelf"
     assert "return_shelf" in actions
     assert "return_home" in actions
+    # Verify move_shelf params include shelf name
+    move_calls = [c for c in executor.calls if c[1] == "move_shelf"]
+    assert move_calls[0][2] == {"shelf": "TestShelf", "location": "A"}
+    assert move_calls[1][2] == {"shelf": "TestShelf", "location": "B"}
+    # Verify return_shelf includes shelf name
+    return_calls = [c for c in executor.calls if c[1] == "return_shelf"]
+    assert return_calls[0][2] == {"shelf": "TestShelf"}
     assert len(notifier.messages) == 2
     assert ("run-1", "r1") in dispatcher.done_calls
     async with db.execute("SELECT status FROM route_runs WHERE id = 'run-1'") as c:

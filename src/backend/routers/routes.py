@@ -26,6 +26,7 @@ class TemplateCreate(BaseModel):
     default_timeout: int = 120
     pinned_robot_id: str | None = None
     confirm_button_id: int | None = None
+    shelf_name: str | None = None
 
 
 class TemplateUpdate(BaseModel):
@@ -34,6 +35,7 @@ class TemplateUpdate(BaseModel):
     default_timeout: int = 120
     pinned_robot_id: str | None = None
     confirm_button_id: int | None = None
+    shelf_name: str | None = None
 
 
 class DispatchRequest(BaseModel):
@@ -42,6 +44,7 @@ class DispatchRequest(BaseModel):
     default_timeout: int = 120
     confirm_button_id: int | None = None
     pinned_robot_id: str | None = None
+    shelf_name: str | None = None
 
 
 # ── Template CRUD ────────────────────────────────────────────────────
@@ -51,7 +54,7 @@ async def list_templates():
     db = _state["db"]
     async with db.execute(
         "SELECT id, name, stops, default_timeout, pinned_robot_id, "
-        "confirm_button_id, created_at FROM route_templates ORDER BY created_at DESC"
+        "confirm_button_id, created_at, shelf_name FROM route_templates ORDER BY created_at DESC"
     ) as cursor:
         rows = await cursor.fetchall()
     return [
@@ -59,6 +62,7 @@ async def list_templates():
             "id": r[0], "name": r[1], "stops": json.loads(r[2]),
             "default_timeout": r[3], "pinned_robot_id": r[4],
             "confirm_button_id": r[5], "created_at": r[6],
+            "shelf_name": r[7],
         }
         for r in rows
     ]
@@ -72,9 +76,9 @@ async def create_template(body: TemplateCreate):
     stops_json = json.dumps([s.model_dump(exclude_none=True) for s in body.stops])
     await db.execute(
         "INSERT INTO route_templates (id, name, stops, default_timeout, "
-        "pinned_robot_id, confirm_button_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "pinned_robot_id, confirm_button_id, shelf_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (tid, body.name, stops_json, body.default_timeout,
-         body.pinned_robot_id, body.confirm_button_id, now),
+         body.pinned_robot_id, body.confirm_button_id, body.shelf_name, now),
     )
     await db.commit()
     return {"ok": True, "id": tid}
@@ -86,9 +90,9 @@ async def update_template(template_id: str, body: TemplateUpdate):
     stops_json = json.dumps([s.model_dump(exclude_none=True) for s in body.stops])
     cursor = await db.execute(
         "UPDATE route_templates SET name = ?, stops = ?, default_timeout = ?, "
-        "pinned_robot_id = ?, confirm_button_id = ? WHERE id = ?",
+        "pinned_robot_id = ?, confirm_button_id = ?, shelf_name = ? WHERE id = ?",
         (body.name, stops_json, body.default_timeout,
-         body.pinned_robot_id, body.confirm_button_id, template_id),
+         body.pinned_robot_id, body.confirm_button_id, body.shelf_name, template_id),
     )
     if cursor.rowcount == 0:
         raise HTTPException(404, f"Template '{template_id}' not found")
@@ -120,6 +124,7 @@ async def dispatch_route(body: DispatchRequest):
         "default_timeout": body.default_timeout,
         "confirm_button_id": body.confirm_button_id,
         "pinned_robot_id": body.pinned_robot_id,
+        "shelf_name": body.shelf_name,
     }
     if body.template_id:
         kwargs["template_id"] = body.template_id

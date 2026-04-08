@@ -41,10 +41,11 @@ class RouteDispatcher:
         confirm_button_id: int | None = None,
         pinned_robot_id: str | None = None,
         template_id: str | None = None,
+        shelf_name: str | None = None,
     ) -> dict:
         if template_id and not stops:
             async with self._db.execute(
-                "SELECT stops, default_timeout, confirm_button_id, pinned_robot_id "
+                "SELECT stops, default_timeout, confirm_button_id, pinned_robot_id, shelf_name "
                 "FROM route_templates WHERE id = ?",
                 (template_id,),
             ) as cursor:
@@ -55,6 +56,7 @@ class RouteDispatcher:
             default_timeout = row[1]
             confirm_button_id = row[2]
             pinned_robot_id = row[3]
+            shelf_name = row[4] if not shelf_name else shelf_name
 
         if not stops:
             return {"ok": False, "error": "No stops provided"}
@@ -66,10 +68,10 @@ class RouteDispatcher:
 
         await self._db.execute(
             "INSERT INTO route_runs (id, template_id, robot_id, stops, default_timeout, "
-            "confirm_button_id, status, current_stop, started_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, -1, ?)",
+            "confirm_button_id, shelf_name, status, current_stop, started_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, -1, ?)",
             (run_id, template_id, robot_id, json.dumps(stops), default_timeout,
-             confirm_button_id, status, now if robot_id else None),
+             confirm_button_id, shelf_name, status, now if robot_id else None),
         )
         await self._db.commit()
 

@@ -22,6 +22,7 @@ class _RunState:
     stops: list[dict]
     default_timeout: int
     confirm_button_id: int | None
+    shelf_name: str | None
     current_stop: int = -1
     cancelled: bool = False
     waiting_event: asyncio.Event = field(default_factory=asyncio.Event)
@@ -49,7 +50,7 @@ class RouteService:
 
     async def start_run(self, run_id: str, robot_id: str) -> None:
         async with self._db.execute(
-            "SELECT stops, default_timeout, confirm_button_id FROM route_runs WHERE id = ?",
+            "SELECT stops, default_timeout, confirm_button_id, shelf_name FROM route_runs WHERE id = ?",
             (run_id,),
         ) as cursor:
             row = await cursor.fetchone()
@@ -60,6 +61,7 @@ class RouteService:
         stops = json.loads(row[0])
         default_timeout = row[1]
         confirm_button_id = row[2]
+        shelf_name = row[3]
 
         state = _RunState(
             run_id=run_id,
@@ -67,6 +69,7 @@ class RouteService:
             stops=stops,
             default_timeout=default_timeout,
             confirm_button_id=confirm_button_id,
+            shelf_name=shelf_name,
         )
         self._runs[run_id] = state
         task = asyncio.create_task(self._execute_route(state))
@@ -130,10 +133,15 @@ class RouteService:
                     "stop_index": i, "location": location,
                 })
 
-                # Move to location
-                result = await self._executor.execute(
-                    robot_id, "move_to_location", {"name": location},
-                )
+                # Move shelf to location (or move_to_location if no shelf)
+                if state.shelf_name:
+                    result = await self._executor.execute(
+                        robot_id, "move_shelf", {"shelf": state.shelf_name, "location": location},
+                    )
+                else:
+                    result = await self._executor.execute(
+                        robot_id, "move_to_location", {"name": location},
+                    )
                 if not result.get("ok") and not state.cancelled:
                     logger.error(f"Move to {location} failed: {result}")
 
@@ -176,7 +184,8 @@ class RouteService:
                     break
 
             # Finishing: return shelf + return home
-            await self._executor.execute(robot_id, "return_shelf", {})
+            if state.shelf_name:
+                await self._executor.execute(robot_id, "return_shelf", {"shelf": state.shelf_name})
             await self._executor.execute(robot_id, "return_home", {})
 
             # Set final status

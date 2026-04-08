@@ -91,14 +91,14 @@ async def test_v4_route_tables_exist(db):
 async def test_v4_route_templates_columns(db):
     async with db.execute("PRAGMA table_info(route_templates)") as c:
         cols = {row[1] for row in await c.fetchall()}
-    assert cols == {"id", "name", "pinned_robot_id", "stops", "default_timeout", "confirm_button_id", "created_at"}
+    assert cols == {"id", "name", "pinned_robot_id", "stops", "default_timeout", "confirm_button_id", "created_at", "shelf_name"}
 
 
 @pytest.mark.asyncio
 async def test_v4_route_runs_columns(db):
     async with db.execute("PRAGMA table_info(route_runs)") as c:
         cols = {row[1] for row in await c.fetchall()}
-    assert cols == {"id", "template_id", "robot_id", "stops", "default_timeout", "confirm_button_id", "status", "current_stop", "started_at", "completed_at"}
+    assert cols == {"id", "template_id", "robot_id", "stops", "default_timeout", "confirm_button_id", "status", "current_stop", "started_at", "completed_at", "shelf_name"}
 
 
 @pytest.mark.asyncio
