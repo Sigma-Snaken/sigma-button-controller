@@ -107,6 +107,10 @@ MIGRATIONS = [
     ALTER TABLE route_templates ADD COLUMN shelf_name TEXT;
     ALTER TABLE route_runs ADD COLUMN shelf_name TEXT;
     """,
+    # V6: Offline route execution mode
+    """
+    ALTER TABLE route_runs ADD COLUMN execution_mode TEXT DEFAULT 'online';
+    """,
 ]
 
 

@@ -98,7 +98,7 @@ async def test_v4_route_templates_columns(db):
 async def test_v4_route_runs_columns(db):
     async with db.execute("PRAGMA table_info(route_runs)") as c:
         cols = {row[1] for row in await c.fetchall()}
-    assert cols == {"id", "template_id", "robot_id", "stops", "default_timeout", "confirm_button_id", "status", "current_stop", "started_at", "completed_at", "shelf_name"}
+    assert cols == {"id", "template_id", "robot_id", "stops", "default_timeout", "confirm_button_id", "status", "current_stop", "started_at", "completed_at", "shelf_name", "execution_mode"}
 
 
 @pytest.mark.asyncio
@@ -106,3 +106,23 @@ async def test_v4_route_stop_logs_columns(db):
     async with db.execute("PRAGMA table_info(route_stop_logs)") as c:
         cols = {row[1] for row in await c.fetchall()}
     assert cols == {"id", "run_id", "stop_index", "location_name", "arrived_at", "confirmed_at", "confirmed_by", "timed_out", "departed_at"}
+
+
+@pytest.mark.asyncio
+async def test_v6_route_runs_execution_mode(db):
+    async with db.execute("PRAGMA table_info(route_runs)") as c:
+        cols = {row[1] for row in await c.fetchall()}
+    assert "execution_mode" in cols
+
+
+@pytest.mark.asyncio
+async def test_v6_execution_mode_default(db):
+    await db.execute(
+        "INSERT INTO route_runs (id, stops, status, current_stop) VALUES (?, '[]', 'queued', -1)",
+        ("run-v6-test",),
+    )
+    await db.commit()
+    async with db.execute("SELECT execution_mode FROM route_runs WHERE id = ?", ("run-v6-test",)) as c:
+        row = await c.fetchone()
+    assert row is not None
+    assert row[0] == "online"
