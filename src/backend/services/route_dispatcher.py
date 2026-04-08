@@ -207,6 +207,16 @@ class RouteDispatcher:
         }
 
     async def rebuild_from_db(self) -> None:
+        # Mark stale offline_running as completed (no way to resume after restart)
+        now = datetime.now(timezone.utc).isoformat()
+        cursor = await self._db.execute(
+            "UPDATE route_runs SET status = 'completed', completed_at = ? "
+            "WHERE status = 'offline_running'", (now,),
+        )
+        if cursor.rowcount:
+            logger.info(f"Cleaned {cursor.rowcount} stale offline_running runs")
+            await self._db.commit()
+
         async with self._db.execute(
             "SELECT id FROM route_runs WHERE status = 'queued' ORDER BY started_at"
         ) as cursor:
