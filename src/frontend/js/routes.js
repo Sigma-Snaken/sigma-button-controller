@@ -501,9 +501,7 @@ async function renderActiveRuns() {
             const isOffline = run.execution_mode === 'offline' || run.status === 'offline_running';
             const barColor = isOffline ? 'var(--teal)' : 'var(--amber)';
             const nameColor = isOffline ? 'var(--teal)' : 'var(--amber)';
-            const cancelBtn = isOffline
-                ? `<button class="btn btn-sm btn-danger" disabled title="離線模式下請至機器人端手動停止" style="opacity:0.4;cursor:not-allowed">取消</button>`
-                : `<button class="btn btn-sm btn-danger run-cancel" data-id="${run.id}">取消</button>`;
+            const cancelBtn = `<button class="btn btn-sm btn-danger run-cancel" data-id="${run.id}">取消</button>`;
             const offlineBadge = isOffline
                 ? `<span style="font-size:0.7rem;font-family:var(--font-display);letter-spacing:1px;text-transform:uppercase;color:var(--teal);border:1px solid var(--teal);padding:0.1rem 0.4rem;margin-left:0.5rem">${STATUS_LABELS.offline_running}</span>`
                 : '';

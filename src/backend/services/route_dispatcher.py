@@ -193,7 +193,20 @@ class RouteDispatcher:
             return {"ok": True}
         for robot_id, active_run_id in self._active.items():
             if active_run_id == run_id:
-                if self._route_service:
+                # Check if offline run — cancel directly in DB
+                async with self._db.execute(
+                    "SELECT execution_mode FROM route_runs WHERE id = ?", (run_id,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+                if row and row[0] == "offline":
+                    self._active.pop(robot_id, None)
+                    await self._db.execute(
+                        "UPDATE route_runs SET status = 'cancelled', completed_at = ? WHERE id = ?",
+                        (datetime.now(timezone.utc).isoformat(), run_id),
+                    )
+                    await self._db.commit()
+                    await self._ws.broadcast("route:cancelled", {"run_id": run_id})
+                elif self._route_service:
                     await self._route_service.cancel_run(run_id)
                 return {"ok": True}
         return {"ok": False, "error": "Run not found"}
