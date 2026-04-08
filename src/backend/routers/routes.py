@@ -156,7 +156,7 @@ async def list_active_runs():
     async with db.execute(
         "SELECT id, template_id, robot_id, stops, default_timeout, "
         "confirm_button_id, status, current_stop, started_at "
-        "FROM route_runs WHERE status IN ('queued', 'assigned', 'running') "
+        "FROM route_runs WHERE status IN ('queued', 'assigned', 'running', 'offline_running') "
         "ORDER BY started_at"
     ) as cursor:
         rows = await cursor.fetchall()
