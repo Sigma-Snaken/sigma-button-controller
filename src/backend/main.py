@@ -167,17 +167,24 @@ async def lifespan(app: FastAPI):
         "offline_deployer": offline_deployer,
     })
 
-    # Set Pi URL for offline route reports
-    try:
-        import httpx as _httpx
-        wifi_url = os.environ.get("WIFI_AGENT_URL", "http://host.docker.internal:8001")
-        async with _httpx.AsyncClient(timeout=2) as client:
-            resp = await client.get(f"{wifi_url}/status")
-            data = resp.json()
-            ip = data.get("ip") or data.get("eth_ip") or "localhost"
-            route_dispatcher.set_pi_url(f"http://{ip}:8000")
-    except Exception:
-        route_dispatcher.set_pi_url("http://localhost:8000")
+    # Set Pi URL for offline route reports (robot needs to reach Pi over the network)
+    pi_url = os.environ.get("PI_URL", "")
+    if not pi_url:
+        try:
+            import httpx as _httpx
+            wifi_url = os.environ.get("WIFI_AGENT_URL", "http://host.docker.internal:8001")
+            async with _httpx.AsyncClient(timeout=2) as client:
+                resp = await client.get(f"{wifi_url}/status")
+                data = resp.json()
+                ip = data.get("ip") or data.get("eth_ip") or ""
+                if ip:
+                    pi_url = f"http://{ip}:8000"
+        except Exception:
+            pass
+    if not pi_url:
+        logger.warning("PI_URL not set and auto-detect failed — offline route reports will not reach Pi")
+        pi_url = "http://localhost:8000"
+    route_dispatcher.set_pi_url(pi_url)
 
     yield
 
