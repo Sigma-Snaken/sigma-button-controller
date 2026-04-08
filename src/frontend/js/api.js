@@ -60,6 +60,12 @@ export const api = {
     getQueueSettings: () => request('GET', '/settings/queue'),
     updateQueueSettings: (data) => request('PUT', '/settings/queue', data),
 
+    // Offline route
+    getRouteMode: () => request('GET', '/settings/route-mode'),
+    updateRouteMode: (data) => request('PUT', '/settings/route-mode', data),
+    testSSH: (data) => request('POST', '/routes/offline/test-ssh', data),
+    getPublicKey: () => request('GET', '/routes/offline/public-key'),
+
     // Routes
     listRouteTemplates: () => request('GET', '/routes/templates'),
     createRouteTemplate: (data) => request('POST', '/routes/templates', data),

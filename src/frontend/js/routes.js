@@ -6,15 +6,18 @@ const container = document.getElementById('routes');
 const STATUS_LABELS = {
     completed: '完成', cancelled: '取消', failed: '失敗',
     queued: '排隊中', assigned: '已指派', running: '執行中',
+    offline_running: '離線執行中',
 };
 const STATUS_COLORS = {
     completed: 'var(--success)', cancelled: 'var(--warning)', failed: 'var(--coral)',
     queued: 'var(--text-muted)', assigned: 'var(--amber)', running: 'var(--amber)',
+    offline_running: 'var(--teal)',
 };
 
 let _robots = [];
 let _buttons = [];
 let _locations = [];
+let _routeMode = 'online';
 
 export async function initRoutes(ws) {
     ws.on('route:assigned', () => renderActiveRuns());
@@ -28,6 +31,8 @@ export async function initRoutes(ws) {
     ws.on('route:cancelled', () => { renderActiveRuns(); renderHistory(); });
     ws.on('route:failed', () => { renderActiveRuns(); renderHistory(); });
     ws.on('route:waiting', (data) => updateCountdown(data));
+    ws.on('route:offline_started', () => renderActiveRuns());
+    ws.on('route:offline_report', () => renderActiveRuns());
     await renderAll();
 }
 
@@ -166,6 +171,97 @@ function createStopPicker(containerEl, selectedStops) {
     return { refresh: render };
 }
 
+// ── Mode Toggle & SSH Panel ──────────────────────────────────────────
+
+function renderModeToggle() {
+    const existing = document.getElementById('route-mode-toggle');
+    if (existing) existing.remove();
+
+    const div = document.createElement('div');
+    div.id = 'route-mode-toggle';
+    div.style.cssText = 'display:flex;align-items:center;gap:1rem;padding:0.75rem 1rem;margin-bottom:1rem;background:var(--panel-mid);border:1px solid var(--border-subtle)';
+    div.innerHTML = `
+        <span style="font-family:var(--font-display);font-size:0.75rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary)">路線模式</span>
+        <div style="display:flex;gap:0">
+            <button class="mode-btn ${_routeMode === 'online' ? 'mode-active' : ''}" data-mode="online"
+                style="padding:0.4rem 1rem;border:1px solid var(--border-subtle);background:${_routeMode === 'online' ? 'var(--amber-subtle)' : 'var(--void)'};color:${_routeMode === 'online' ? 'var(--amber)' : 'var(--text-muted)'};font-family:var(--font-display);font-size:0.7rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer">Online</button>
+            <button class="mode-btn ${_routeMode === 'offline' ? 'mode-active' : ''}" data-mode="offline"
+                style="padding:0.4rem 1rem;border:1px solid var(--border-subtle);border-left:none;background:${_routeMode === 'offline' ? 'var(--teal-subtle,rgba(0,139,114,0.08))' : 'var(--void)'};color:${_routeMode === 'offline' ? 'var(--teal)' : 'var(--text-muted)'};font-family:var(--font-display);font-size:0.7rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer">Offline</button>
+        </div>
+    `;
+    div.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.onclick = async () => {
+            const mode = btn.dataset.mode;
+            try {
+                await api.updateRouteMode({ mode });
+                _routeMode = mode;
+                renderModeToggle();
+                renderSSHPanel();
+            } catch (e) {
+                showToast('切換失敗: ' + e.message, true);
+            }
+        };
+    });
+    container.prepend(div);
+}
+
+async function renderSSHPanel() {
+    const existing = document.getElementById('ssh-panel');
+    if (existing) existing.remove();
+    if (_routeMode !== 'offline') return;
+
+    const panel = document.createElement('div');
+    panel.id = 'ssh-panel';
+    panel.style.cssText = 'padding:0.75rem 1rem;margin-bottom:1rem;background:var(--panel-light);border:1px solid var(--border-subtle)';
+
+    let html = '<div style="font-family:var(--font-display);font-size:0.7rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem">SSH 連線狀態</div>';
+
+    for (const r of _robots) {
+        html += `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+            <span style="font-size:0.8rem">${r.name} (${r.ip})</span>
+            <span id="ssh-status-${r.id}" style="font-size:0.75rem;color:var(--text-muted)">—</span>
+            <button onclick="window._testSSH('${r.id}')" style="font-size:0.7rem;padding:0.2rem 0.5rem;border:1px solid var(--border-subtle);background:var(--void);cursor:pointer;font-family:var(--font-mono)">測試</button>
+        </div>`;
+    }
+
+    html += '<div id="ssh-key-display" style="display:none;margin-top:0.5rem;padding:0.5rem;background:var(--terminal-bg);border:1px solid var(--border-subtle);font-size:0.7rem;font-family:var(--font-mono);word-break:break-all"></div>';
+    panel.innerHTML = html;
+
+    const toggle = document.getElementById('route-mode-toggle');
+    if (toggle) toggle.after(panel);
+    else container.prepend(panel);
+}
+
+window._testSSH = async (robotId) => {
+    const el = document.getElementById(`ssh-status-${robotId}`);
+    if (el) el.textContent = '測試中...';
+    try {
+        const result = await api.testSSH({ robot_id: robotId });
+        if (result.ok) {
+            if (el) { el.textContent = '✓ OK'; el.style.color = 'var(--mint)'; }
+        } else {
+            if (el) { el.textContent = '✗ ' + (result.error || '失敗'); el.style.color = 'var(--coral)'; }
+            showPublicKey();
+        }
+    } catch (e) {
+        if (el) { el.textContent = '✗ ' + e.message; el.style.color = 'var(--coral)'; }
+        showPublicKey();
+    }
+};
+
+async function showPublicKey() {
+    const display = document.getElementById('ssh-key-display');
+    if (!display) return;
+    try {
+        const data = await api.getPublicKey();
+        display.style.display = 'block';
+        display.innerHTML = `<div style="color:var(--text-secondary);margin-bottom:0.3rem">請將以下公鑰加入機器人的 ~/.ssh/authorized_keys：</div><code>${data.public_key}</code>`;
+    } catch {
+        display.style.display = 'block';
+        display.innerHTML = '<span style="color:var(--coral)">無法取得 SSH 公鑰</span>';
+    }
+}
+
 // ── Full Render ──────────────────────────────────────────────────────
 
 async function renderAll() {
@@ -174,7 +270,13 @@ async function renderAll() {
         <div id="rt-dispatch"></div>
         <div id="rt-active"></div>
         <div id="rt-history"></div>`;
+    try {
+        const modeData = await api.getRouteMode();
+        _routeMode = modeData.mode || 'online';
+    } catch { _routeMode = 'online'; }
     await loadMeta();
+    renderModeToggle();
+    await renderSSHPanel();
     await Promise.all([
         renderTemplates(),
         renderQuickDispatch(),
@@ -373,25 +475,38 @@ async function renderActiveRuns() {
             const current = run.current_stop ?? -1;
             const total = stops.length;
             const pct = total > 0 ? Math.round(((current + 1) / total) * 100) : 0;
+            const isOffline = run.execution_mode === 'offline' || run.status === 'offline_running';
+            const barColor = isOffline ? 'var(--teal)' : 'var(--amber)';
+            const nameColor = isOffline ? 'var(--teal)' : 'var(--amber)';
+            const cancelBtn = isOffline
+                ? `<button class="btn btn-sm btn-danger" disabled title="離線模式下請至機器人端手動停止" style="opacity:0.4;cursor:not-allowed">取消</button>`
+                : `<button class="btn btn-sm btn-danger run-cancel" data-id="${run.id}">取消</button>`;
+            const offlineBadge = isOffline
+                ? `<span style="font-size:0.7rem;font-family:var(--font-display);letter-spacing:1px;text-transform:uppercase;color:var(--teal);border:1px solid var(--teal);padding:0.1rem 0.4rem;margin-left:0.5rem">${STATUS_LABELS.offline_running}</span>`
+                : '';
+            const reportLine = isOffline && run.last_report_time
+                ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.25rem">最後回報: ${fmtShortTime(run.last_report_time)}</div>`
+                : '';
 
             return `<div class="route-run-card" data-run="${run.id}" style="border:1px solid var(--border-medium);border-radius:4px;padding:0.75rem;margin-bottom:0.75rem;background:var(--panel-mid)">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
-                    <span style="font-weight:600;color:var(--amber)">${robotName(run.robot_id)}</span>
-                    <button class="btn btn-sm btn-danger run-cancel" data-id="${run.id}">取消</button>
+                    <span style="font-weight:600;color:${nameColor}">${robotName(run.robot_id)}${offlineBadge}</span>
+                    ${cancelBtn}
                 </div>
                 <div style="background:var(--border-subtle);border-radius:2px;height:6px;margin-bottom:0.5rem">
-                    <div style="background:var(--amber);height:100%;border-radius:2px;width:${pct}%;transition:width 0.3s"></div>
+                    <div style="background:${barColor};height:100%;border-radius:2px;width:${pct}%;transition:width 0.3s"></div>
                 </div>
                 <div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-bottom:0.5rem;font-size:0.82rem">
                     ${stops.map((s, i) => {
                         let icon, color;
                         if (i < current) { icon = '\u2713'; color = 'var(--success)'; }
-                        else if (i === current) { icon = '\u25cf'; color = 'var(--amber)'; }
+                        else if (i === current) { icon = '\u25cf'; color = isOffline ? 'var(--teal)' : 'var(--amber)'; }
                         else { icon = '\u25cb'; color = 'var(--text-muted)'; }
                         return `<span style="color:${color}">${icon} ${s.name}</span>`;
                     }).join('')}
                 </div>
                 <div class="countdown-display" data-run="${run.id}" style="font-size:0.82rem;color:var(--text-muted)"></div>
+                ${reportLine}
             </div>`;
         }).join('')}
     </div>`;
