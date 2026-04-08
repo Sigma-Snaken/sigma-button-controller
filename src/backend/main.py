@@ -91,32 +91,20 @@ async def lifespan(app: FastAPI):
     offline_deployer = OfflineDeployer()
     route_dispatcher.set_offline_components(offline_generator, offline_deployer)
 
-    # Load route_mode from DB
-    try:
-        async with db.execute("SELECT value FROM settings WHERE key = 'route_mode'") as cursor:
-            row = await cursor.fetchone()
-        if row:
-            route_dispatcher.set_route_mode(row[0])
-    except Exception:
-        pass
-
-    # Load telegram config from DB
+    # Load all settings from DB in one query
     try:
         import json as _json
-        async with db.execute("SELECT value FROM settings WHERE key = 'telegram_config'") as cursor:
-            row = await cursor.fetchone()
-        if row:
-            cfg = _json.loads(row[0])
+        settings = {}
+        async with db.execute("SELECT key, value FROM settings") as cursor:
+            async for row in cursor:
+                settings[row[0]] = row[1]
+        if "route_mode" in settings:
+            route_dispatcher.set_route_mode(settings["route_mode"])
+        if "telegram_config" in settings:
+            cfg = _json.loads(settings["telegram_config"])
             notifier.configure(cfg.get("bot_token", ""), cfg.get("chat_id", ""))
-    except Exception:
-        pass
-
-    # Load queue_enabled from DB
-    try:
-        async with db.execute("SELECT value FROM settings WHERE key = 'queue_enabled'") as cursor:
-            row = await cursor.fetchone()
-        if row:
-            command_queue.set_enabled(row[0] == "true")
+        if "queue_enabled" in settings:
+            command_queue.set_enabled(settings["queue_enabled"] == "true")
     except Exception:
         pass
 
@@ -167,13 +155,11 @@ async def lifespan(app: FastAPI):
         "offline_deployer": offline_deployer,
     })
 
-    # Load Pi URL for offline route reports from DB
+    # Load Pi URL for offline route reports (already in settings dict from above)
     try:
-        async with db.execute("SELECT value FROM settings WHERE key = 'pi_url'") as cursor:
-            row = await cursor.fetchone()
-        if row and row[0]:
-            route_dispatcher.set_pi_url(row[0])
-    except Exception:
+        if settings.get("pi_url"):
+            route_dispatcher.set_pi_url(settings["pi_url"])
+    except NameError:
         pass
 
     yield

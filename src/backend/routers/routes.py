@@ -29,13 +29,7 @@ class TemplateCreate(BaseModel):
     shelf_name: str | None = None
 
 
-class TemplateUpdate(BaseModel):
-    name: str
-    stops: list[StopItem]
-    default_timeout: int = 120
-    pinned_robot_id: str | None = None
-    confirm_button_id: int | None = None
-    shelf_name: str | None = None
+TemplateUpdate = TemplateCreate
 
 
 class DispatchRequest(BaseModel):
@@ -312,19 +306,10 @@ async def _handle_offline_report(db, ws_manager, run_id, event, stop_index, time
             "WHERE run_id = ? AND stop_index = ?",
             (now, run_id, stop_index),
         )
-    elif event == "completed":
+    elif event in ("completed", "failed"):
         await db.execute(
-            "UPDATE route_runs SET status = 'completed', completed_at = ? WHERE id = ?",
-            (now, run_id),
-        )
-        # Release robot from dispatcher active tracking
-        robot_id = row[1]
-        if dispatcher and robot_id:
-            await dispatcher.on_route_done(run_id, robot_id)
-    elif event == "failed":
-        await db.execute(
-            "UPDATE route_runs SET status = 'failed', completed_at = ? WHERE id = ?",
-            (now, run_id),
+            f"UPDATE route_runs SET status = ?, completed_at = ? WHERE id = ?",
+            (event, now, run_id),
         )
         robot_id = row[1]
         if dispatcher and robot_id:
