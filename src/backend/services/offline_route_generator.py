@@ -158,12 +158,12 @@ def main():
         print("[route_executor] Going home...", flush=True)
         client.return_home()
         print(f"[route_executor] Route {{RUN_ID}} completed, reporting...", flush=True)
-        try_report("completed", retries=6)  # retry up to 6 times (10s apart = ~1 min)
+        try_report("completed", retries=60)  # retry up to 60 times (10s apart = ~10 min)
         print(f"[route_executor] Done", flush=True)
 
     except Exception as exc:
         print(f"[route_executor] ERROR: {{exc}}", flush=True)
-        try_report("failed", retries=6)
+        try_report("failed", retries=60)
         try:
             client.return_shelf(SHELF_NAME)
         except Exception:
