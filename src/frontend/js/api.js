@@ -63,6 +63,8 @@ export const api = {
     // Offline route
     getRouteMode: () => request('GET', '/settings/route-mode'),
     updateRouteMode: (data) => request('PUT', '/settings/route-mode', data),
+    getPiUrl: () => request('GET', '/settings/pi-url'),
+    updatePiUrl: (data) => request('PUT', '/settings/pi-url', data),
     testSSH: (data) => request('POST', '/routes/offline/test-ssh', data),
     getPublicKey: () => request('GET', '/routes/offline/public-key'),
 

@@ -167,10 +167,14 @@ async def lifespan(app: FastAPI):
         "offline_deployer": offline_deployer,
     })
 
-    # Pi URL for offline route reports — set from env, or updated lazily from dispatch request header
-    pi_url = os.environ.get("PI_URL", "")
-    if pi_url:
-        route_dispatcher.set_pi_url(pi_url)
+    # Load Pi URL for offline route reports from DB
+    try:
+        async with db.execute("SELECT value FROM settings WHERE key = 'pi_url'") as cursor:
+            row = await cursor.fetchone()
+        if row and row[0]:
+            route_dispatcher.set_pi_url(row[0])
+    except Exception:
+        pass
 
     yield
 

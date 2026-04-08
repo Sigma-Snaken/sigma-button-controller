@@ -214,7 +214,19 @@ async function renderSSHPanel() {
     panel.id = 'ssh-panel';
     panel.style.cssText = 'padding:0.75rem 1rem;margin-bottom:1rem;background:var(--panel-light);border:1px solid var(--border-subtle)';
 
-    let html = '<div style="font-family:var(--font-display);font-size:0.7rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem">SSH 連線狀態</div>';
+    // Pi URL input
+    let piUrl = '';
+    try { piUrl = (await api.getPiUrl()).url || ''; } catch {}
+
+    let html = `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem">
+        <span style="font-family:var(--font-display);font-size:0.7rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary);white-space:nowrap">回報 IP</span>
+        <input id="pi-url-input" type="text" value="${piUrl}" placeholder="http://192.168.50.6:8000"
+            style="flex:1;padding:0.35rem 0.5rem;border:1px solid var(--border-subtle);background:var(--void);font-family:var(--font-mono);font-size:0.8rem;color:var(--text-primary)">
+        <button id="pi-url-save" style="padding:0.35rem 0.7rem;border:1px solid var(--border-subtle);background:var(--void);cursor:pointer;font-family:var(--font-display);font-size:0.7rem;font-weight:600;letter-spacing:1px;text-transform:uppercase">儲存</button>
+    </div>`;
+
+    // SSH status
+    html += '<div style="font-family:var(--font-display);font-size:0.7rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem">SSH 連線狀態</div>';
 
     for (const r of _robots) {
         html += `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
@@ -226,6 +238,17 @@ async function renderSSHPanel() {
 
     html += '<div id="ssh-key-display" style="display:none;margin-top:0.5rem;padding:0.5rem;background:var(--terminal-bg);border:1px solid var(--border-subtle);font-size:0.7rem;font-family:var(--font-mono);word-break:break-all"></div>';
     panel.innerHTML = html;
+
+    // Pi URL save handler
+    panel.querySelector('#pi-url-save').onclick = async () => {
+        const val = panel.querySelector('#pi-url-input').value.trim();
+        try {
+            await api.updatePiUrl({ url: val });
+            showToast('回報 IP 已儲存');
+        } catch (e) {
+            showToast('儲存失敗: ' + e.message, true);
+        }
+    };
 
     const toggle = document.getElementById('route-mode-toggle');
     if (toggle) toggle.after(panel);

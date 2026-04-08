@@ -2,7 +2,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from main import _state
@@ -115,15 +115,10 @@ async def delete_template(template_id: str):
 # ── Dispatch / Cancel ────────────────────────────────────────────────
 
 @router.post("/routes/dispatch")
-async def dispatch_route(body: DispatchRequest, request: Request):
+async def dispatch_route(body: DispatchRequest):
     dispatcher = _state.get("route_dispatcher")
     if not dispatcher:
         raise HTTPException(503, "Route dispatcher not available")
-
-    # Set Pi URL from request header (browser knows Pi's real IP)
-    host = request.headers.get("host", "").split(":")[0]
-    if host and host not in ("localhost", "127.0.0.1"):
-        dispatcher.set_pi_url(f"http://{host}:8000")
 
     kwargs: dict = {
         "default_timeout": body.default_timeout,

@@ -181,3 +181,36 @@ async def update_route_mode(body: RouteModeConfig):
     return {"ok": True, "mode": body.mode}
 
 
+@router.get("/settings/pi-url")
+async def get_pi_url():
+    db = _state["db"]
+    url = ""
+    async with db.execute(
+        "SELECT value FROM settings WHERE key = 'pi_url'"
+    ) as cursor:
+        row = await cursor.fetchone()
+    if row:
+        url = row[0]
+    return {"url": url}
+
+
+class PiUrlConfig(BaseModel):
+    url: str
+
+
+@router.put("/settings/pi-url")
+async def update_pi_url(body: PiUrlConfig):
+    db = _state["db"]
+    url = body.url.strip().rstrip("/")
+    await db.execute(
+        "INSERT INTO settings (key, value) VALUES ('pi_url', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (url,),
+    )
+    await db.commit()
+    dispatcher = _state.get("route_dispatcher")
+    if dispatcher:
+        dispatcher.set_pi_url(url)
+    return {"ok": True, "url": url}
+
+
