@@ -202,6 +202,8 @@ class PiUrlConfig(BaseModel):
 async def update_pi_url(body: PiUrlConfig):
     db = _state["db"]
     url = body.url.strip().rstrip("/")
+    if url and not url.startswith("http"):
+        url = f"http://{url}"
     await db.execute(
         "INSERT INTO settings (key, value) VALUES ('pi_url', ?) "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
