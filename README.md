@@ -127,20 +127,33 @@ sequenceDiagram
 
 ### 生產部署
 
+**1. 下載部署檔案**
+
 ```bash
-# 1. 下載部署檔案
 curl -L https://github.com/Sigma-Snaken/sigma-button-controller/archive/refs/heads/main.tar.gz \
     | tar xz --strip=1 sigma-button-controller-main/deploy
 cd deploy
+```
 
-# 2. 首次設定 (Docker + Python + uv + udev + systemd)
+**2. 首次設定 (Docker + udev + systemd)**
+
+```bash
 chmod +x setup.sh && ./setup.sh
+```
 
-# 3. 啟動所有服務 (Mosquitto + Z2M + App)
+> 首次安裝 Docker 後，腳本會自動停止並提示重新登入。
+> 請登出再登入（或 `sudo reboot`），然後再執行一次 `./setup.sh` 完成剩餘設定。
+
+**3. 啟動所有服務 (Mosquitto + Z2M + App)**
+
+```bash
 cd /opt/app/sigma-button-controller
 docker compose pull && docker compose up -d
+```
 
-# 4. 啟動 WiFi agent
+**4. 啟動 WiFi agent**
+
+```bash
 sudo systemctl start sigma-wifi
 ```
 
