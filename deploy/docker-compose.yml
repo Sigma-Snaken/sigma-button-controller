@@ -37,9 +37,3 @@ services:
     depends_on:
       - mosquitto
     restart: unless-stopped
-
-networks:
-  default:
-    ipam:
-      config:
-        - subnet: 10.89.0.0/24

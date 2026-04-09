@@ -12,6 +12,20 @@ if ! command -v docker &> /dev/null; then
     exit 0
 fi
 
+# ── Docker network: restrict to 10.255.255.0/24 to avoid LAN conflicts ──
+DAEMON_JSON=/etc/docker/daemon.json
+if [ ! -f "$DAEMON_JSON" ] || ! grep -q default-address-pools "$DAEMON_JSON"; then
+    echo "Configuring Docker subnet (10.255.255.0/24)..."
+    sudo tee "$DAEMON_JSON" > /dev/null << 'JSON'
+{
+  "default-address-pools": [
+    { "base": "10.255.255.0/24", "size": 28 }
+  ]
+}
+JSON
+    sudo systemctl restart docker
+fi
+
 # ── Zigbee dongle udev rule ──
 echo "Setting up Zigbee dongle udev rule..."
 echo 'SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="zigbee"' | sudo tee /etc/udev/rules.d/99-zigbee.rules > /dev/null
