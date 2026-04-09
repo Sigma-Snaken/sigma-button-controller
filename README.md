@@ -157,6 +157,12 @@ docker compose pull && docker compose up -d
 sudo systemctl start sigma-wifi
 ```
 
+> **Docker 網段注意**
+>
+> `setup.sh` 會將 Docker 內部網段限縮為 `10.255.255.0/24`（寫入 `/etc/docker/daemon.json`），
+> 避免 Docker 預設佔用 `172.17~172.31` 網段導致與實體 LAN（如 `172.20.10.x`）衝突。
+> 若上位網路恰好使用 `10.255.255.x` 網段，需手動修改 `daemon.json` 中的 `base` 為其他不衝突的私有網段。
+
 > **Zigbee Dongle 注意**
 >
 > `setup.sh` 建立 udev rule 將 dongle 固定為 `/dev/zigbee`。預設針對 SONOFF (USB ID `10c4:ea60`)。
