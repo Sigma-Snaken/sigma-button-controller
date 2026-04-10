@@ -73,6 +73,15 @@ async function renderWifi() {
 
         <div class="card">
             <div class="card-header">
+                <h2>已儲存的連線</h2>
+            </div>
+            <div id="wifi-saved">
+                <p class="hint">載入中...</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
                 <h2>可用網路</h2>
                 <button class="btn btn-sm btn-primary" id="wifi-scan">掃描</button>
             </div>
@@ -84,6 +93,7 @@ async function renderWifi() {
 
     container.querySelector('#wifi-refresh').onclick = () => renderWifi();
     container.querySelector('#wifi-scan').onclick = scanNetworks;
+    loadSavedConnections();
 
     if (isAP) {
         container.querySelector('#hotspot-stop').onclick = stopHotspot;
@@ -100,6 +110,57 @@ function signalBar(strength) {
     if (strength >= 50) return '▂▄▆░';
     if (strength >= 25) return '▂▄░░';
     return '▂░░░';
+}
+
+async function loadSavedConnections() {
+    const saved = container.querySelector('#wifi-saved');
+    try {
+        const result = await api.getWifiConnections();
+        if (!result.connections || !result.connections.length) {
+            saved.innerHTML = '<p class="hint">無已儲存的連線</p>';
+            return;
+        }
+        saved.innerHTML = `<table><thead><tr>
+            <th>SSID</th><th>連線名稱</th><th>狀態</th><th>自動連線</th><th>操作</th>
+        </tr></thead><tbody>${result.connections.map(c => `
+            <tr>
+                <td>${c.ssid || c.name}</td>
+                <td style="color:var(--text-muted);font-size:0.82rem">${c.name}</td>
+                <td>${c.active ? '<span class="text-success">使用中</span>' : '<span style="color:var(--text-muted)">未使用</span>'}</td>
+                <td><label style="cursor:pointer"><input type="checkbox" class="autoconnect-toggle" data-name="${c.name}" ${c.autoconnect ? 'checked' : ''} style="vertical-align:middle"> ${c.autoconnect ? '開' : '關'}</label></td>
+                <td>${c.active ? '' : `<button class="btn btn-sm btn-danger delete-conn-btn" data-name="${c.name}">刪除</button>`}</td>
+            </tr>
+        `).join('')}</tbody></table>`;
+        saved.querySelectorAll('.delete-conn-btn').forEach(btn => {
+            btn.onclick = async () => {
+                if (!confirm(`確定刪除連線「${btn.dataset.name}」？`)) return;
+                try {
+                    const res = await api.deleteWifiConnection({ name: btn.dataset.name });
+                    if (res.ok) { showToast(res.message); loadSavedConnections(); }
+                    else showToast(res.error, 'error');
+                } catch (e) { showToast(e.message, 'error'); }
+            };
+        });
+        saved.querySelectorAll('.autoconnect-toggle').forEach(cb => {
+            cb.onchange = async () => {
+                try {
+                    const res = await api.setWifiAutoconnect({ name: cb.dataset.name, enabled: cb.checked });
+                    if (res.ok) {
+                        showToast(res.message);
+                        loadSavedConnections();
+                    } else {
+                        showToast(res.error, 'error');
+                        cb.checked = !cb.checked;
+                    }
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    cb.checked = !cb.checked;
+                }
+            };
+        });
+    } catch (e) {
+        saved.innerHTML = `<p class="hint text-danger">${e.message}</p>`;
+    }
 }
 
 async function scanNetworks() {

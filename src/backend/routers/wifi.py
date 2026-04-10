@@ -44,3 +44,18 @@ async def hotspot_start(request: Request):
 @router.post("/wifi/hotspot/stop")
 async def hotspot_stop():
     return await _proxy("POST", "/hotspot/stop")
+
+
+@router.get("/wifi/connections")
+async def wifi_connections():
+    return await _proxy("GET", "/connections")
+
+
+@router.post("/wifi/autoconnect")
+async def wifi_autoconnect(request: Request):
+    return await _proxy("POST", "/autoconnect", await request.json())
+
+
+@router.post("/wifi/connection/delete")
+async def wifi_delete_connection(request: Request):
+    return await _proxy("POST", "/connection/delete", await request.json())
