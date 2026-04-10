@@ -118,11 +118,14 @@ async def lifespan(app: FastAPI):
 
     async with db.execute("SELECT id, ip FROM robots WHERE enabled = 1") as cursor:
         rows = await cursor.fetchall()
-    for robot_id, ip in rows:
+    def _connect_robot(rid, addr):
         try:
-            await loop.run_in_executor(None, robot_manager.add, robot_id, ip)
+            robot_manager.add(rid, addr)
         except Exception as e:
-            logger.warning(f"Failed to connect robot {robot_id} at {ip}: {e}")
+            logger.warning(f"Failed to connect robot {rid} at {addr}: {e}")
+
+    for robot_id, ip in rows:
+        loop.run_in_executor(None, _connect_robot, robot_id, ip)
 
     await route_dispatcher.rebuild_from_db()
 

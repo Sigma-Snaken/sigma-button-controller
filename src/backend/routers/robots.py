@@ -72,23 +72,48 @@ async def create_robot(body: RobotCreate):
         await db.commit()
     except Exception as e:
         raise HTTPException(400, f"Failed to create robot: {e}")
-    # Connect to robot immediately
+    # Connect in background — return immediately so the UI stays responsive.
+    # Connection result is pushed via WebSocket (robot:connection event).
     rm = _state.get("robot_manager")
-    connected = False
     if rm:
-        try:
-            rm.add(robot_id, body.ip.strip())
-            connected = True
-        except Exception as e:
-            logger.warning(f"Robot added to DB but connection failed: {e}")
-    return {"ok": True, "id": robot_id, "connected": connected}
+        loop = asyncio.get_event_loop()
+        ip = body.ip.strip()
+
+        def _bg_connect():
+            try:
+                rm.add(robot_id, ip)
+            except Exception as e:
+                logger.warning(f"Robot added to DB but connection failed: {e}")
+
+        loop.run_in_executor(None, _bg_connect)
+    return {"ok": True, "id": robot_id}
 
 
 @router.put("/robots/{robot_id}")
 async def update_robot(robot_id: str, body: RobotUpdate):
     db = _state["db"]
+    # Check if IP changed — need to reconnect
+    old_ip = None
+    async with db.execute("SELECT ip FROM robots WHERE id = ?", (robot_id,)) as cursor:
+        row = await cursor.fetchone()
+        if row:
+            old_ip = row[0]
     await db.execute("UPDATE robots SET name = ?, ip = ? WHERE id = ?", (body.name, body.ip, robot_id))
     await db.commit()
+    # Reconnect if IP changed
+    rm = _state.get("robot_manager")
+    new_ip = body.ip.strip()
+    if rm and old_ip and old_ip != new_ip:
+        loop = asyncio.get_event_loop()
+
+        def _bg_reconnect():
+            try:
+                rm.remove(robot_id)
+                rm.add(robot_id, new_ip)
+            except Exception as e:
+                logger.warning(f"Reconnect failed for {robot_id}: {e}")
+
+        loop.run_in_executor(None, _bg_reconnect)
     return {"ok": True}
 
 
@@ -97,7 +122,8 @@ async def delete_robot(robot_id: str):
     db = _state["db"]
     rm = _state.get("robot_manager")
     if rm:
-        rm.remove(robot_id)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, rm.remove, robot_id)
     await db.execute("DELETE FROM robots WHERE id = ?", (robot_id,))
     await db.commit()
     return {"ok": True}

@@ -168,6 +168,8 @@ class RobotService:
         if self.conn:
             try: self.conn.stop_monitoring()
             except Exception: pass
+            try: KachakaConnection.remove(self.ip)
+            except Exception: pass
         logger.info(f"Stopped robot service for {self.robot_id}")
 
 

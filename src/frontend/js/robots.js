@@ -14,6 +14,7 @@ export async function initRobots(ws) {
     ws.on('queue:completed', () => renderQueue());
     ws.on('queue:removed', () => renderQueue());
     ws.on('queue:cancelled', () => renderQueue());
+    ws.on('robot:connection', () => renderRobots());
     await renderRobots();
 }
 
