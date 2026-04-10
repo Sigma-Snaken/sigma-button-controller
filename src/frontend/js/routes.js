@@ -496,8 +496,8 @@ async function renderActiveRuns() {
         ${runs.map(run => {
             const stops = run.stops || [];
             const current = run.current_stop ?? -1;
-            const total = stops.length;
-            const pct = total > 0 ? Math.round(((current + 1) / total) * 100) : 0;
+            const total = stops.length + 2; // +2 for pickup shelf + return shelf/home
+            const pct = total > 0 ? Math.min(Math.round(((current + 2) / total) * 100), run.status === 'completed' ? 100 : 95) : 0;
             const isOffline = run.execution_mode === 'offline' || run.status === 'offline_running';
             const barColor = isOffline ? 'var(--teal)' : 'var(--amber)';
             const nameColor = isOffline ? 'var(--teal)' : 'var(--amber)';
