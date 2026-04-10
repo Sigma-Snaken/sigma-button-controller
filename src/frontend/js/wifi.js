@@ -10,7 +10,7 @@ export async function initWifi() {
 async function renderWifi() {
     container.innerHTML = `<div class="card"><div class="card-header"><h2>WiFi 狀態</h2></div><p class="hint">載入中...</p></div>`;
     const status = await api.getWifiStatus().catch(() => ({
-        connected: false, ssid: '', ip: '', signal: 0, mode: 'unknown', error: 'D-Bus 未連線'
+        connected: false, ssid: '', ip: '', signal: 0, mode: 'unknown', error: '無法取得 WiFi 狀態'
     }));
 
     const isAP = status.mode === 'ap';
