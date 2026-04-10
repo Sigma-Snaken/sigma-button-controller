@@ -42,6 +42,9 @@ export const api = {
     connectWifi: (data) => request('POST', '/wifi/connect', data),
     startHotspot: (data) => request('POST', '/wifi/hotspot/start', data),
     stopHotspot: () => request('POST', '/wifi/hotspot/stop'),
+    getWifiConnections: () => request('GET', '/wifi/connections'),
+    setWifiAutoconnect: (data) => request('POST', '/wifi/autoconnect', data),
+    deleteWifiConnection: (data) => request('POST', '/wifi/connection/delete', data),
 
     // System
     getSystemInfo: () => request('GET', '/system/info'),

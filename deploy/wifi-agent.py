@@ -122,10 +122,75 @@ async def hotspot_stop():
     return {"ok": True, "message": "AP stopped"}
 
 
+async def wifi_connections():
+    """List saved WiFi connections with autoconnect status."""
+    code, out = await run([
+        "nmcli", "-t", "-f", "NAME,TYPE,AUTOCONNECT,ACTIVE",
+        "connection", "show",
+    ])
+    if code != 0:
+        return {"connections": [], "error": out}
+    connections = []
+    for line in out.splitlines():
+        parts = line.split(":")
+        if len(parts) < 4:
+            continue
+        name, ctype, autoconnect, active = parts[0], parts[1], parts[2], parts[3]
+        if ctype not in ("802-11-wireless", "wifi"):
+            continue
+        # Fetch the actual SSID for this connection
+        ssid = name
+        _, detail = await run([
+            "nmcli", "-t", "-f", "802-11-wireless.ssid",
+            "connection", "show", name,
+        ])
+        for dline in detail.splitlines():
+            if dline.startswith("802-11-wireless.ssid:"):
+                ssid = dline.split(":", 1)[1]
+                break
+        connections.append({
+            "name": name,
+            "ssid": ssid,
+            "autoconnect": autoconnect == "yes",
+            "active": active == "yes",
+        })
+    return {"connections": connections}
+
+
+async def wifi_delete_connection(name):
+    """Delete a saved WiFi connection profile."""
+    # Prevent deleting the active connection
+    code, out = await run([
+        "nmcli", "-t", "-f", "NAME,ACTIVE", "connection", "show", name,
+    ])
+    for line in (out or "").splitlines():
+        if line.startswith("GENERAL.STATE:") and "activated" in line.lower():
+            return {"ok": False, "error": f"無法刪除使用中的連線: {name}"}
+    code, out = await run(["nmcli", "connection", "delete", name])
+    if code != 0:
+        return {"ok": False, "error": out}
+    return {"ok": True, "message": f"已刪除: {name}"}
+
+
+async def wifi_set_autoconnect(name, enabled):
+    """Enable or disable autoconnect for a saved WiFi connection."""
+    value = "yes" if enabled else "no"
+    code, out = await run([
+        "nmcli", "connection", "modify", name,
+        "connection.autoconnect", value,
+    ])
+    if code != 0:
+        return {"ok": False, "error": out}
+    return {"ok": True, "message": f"{name} autoconnect={'on' if enabled else 'off'}"}
+
+
 ROUTES = {
     ("GET", "/status"): lambda _: wifi_status(),
+    ("GET", "/connections"): lambda _: wifi_connections(),
     ("POST", "/scan"): lambda _: wifi_scan(),
     ("POST", "/connect"): lambda b: wifi_connect(b["ssid"], b.get("password", "")),
+    ("POST", "/autoconnect"): lambda b: wifi_set_autoconnect(b["name"], b["enabled"]),
+    ("POST", "/connection/delete"): lambda b: wifi_delete_connection(b["name"]),
     ("POST", "/hotspot/start"): lambda b: hotspot_start(b.get("ssid", "SIGMA-SETUP"), b.get("password", "")),
     ("POST", "/hotspot/stop"): lambda _: hotspot_stop(),
 }
