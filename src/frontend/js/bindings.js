@@ -7,7 +7,7 @@ const TRIGGER_LABELS = {single:'單擊',double:'雙擊',long:'長按'};
 const ACTIONS = [
     {value:'move_to_location',label:'移動到位置'},{value:'return_home',label:'回充電座'},{value:'speak',label:'語音播報'},
     {value:'move_shelf',label:'搬運貨架'},{value:'return_shelf',label:'歸還貨架'},{value:'dock_shelf',label:'對接貨架'},
-    {value:'undock_shelf',label:'放下貨架'},{value:'start_shortcut',label:'執行捷徑'},{value:'start_route',label:'執行路線'},{value:'cancel_command',label:'取消命令'},
+    {value:'undock_shelf',label:'放下貨架'},{value:'reset_shelf',label:'重置貨架位置'},{value:'start_shortcut',label:'執行捷徑'},{value:'start_route',label:'執行路線'},{value:'cancel_command',label:'取消命令'},
 ];
 
 export async function initBindings() { await renderBindings(); }
@@ -34,7 +34,7 @@ async function loadBindings(buttonId,robots) {
             const action=actionSel.value,robotId=robotSel.value;
             paramsDiv.innerHTML='';
             if(!action)return;
-            if(!robotId&&['move_to_location','move_shelf','return_shelf','start_shortcut'].includes(action)){
+            if(!robotId&&['move_to_location','move_shelf','return_shelf','reset_shelf','start_shortcut'].includes(action)){
                 paramsDiv.innerHTML='<p style="color:var(--warning);font-size:0.8rem">請先選擇機器人</p>';return;
             }
             try{
@@ -51,6 +51,10 @@ async function loadBindings(buttonId,robots) {
                     const cs=b&&b.action===action?b.params.shelf:'',cl=b&&b.action===action?b.params.location:'';
                     paramsDiv.innerHTML=`<div class="form-group"><label>貨架</label><select class="param-shelf"><option value="">-- 選擇貨架 --</option>${shelves.map(s=>`<option value="${s.name}" ${s.name===cs?'selected':''}>${s.name}</option>`).join('')}</select></div><div class="form-group"><label>目標位置</label><select class="param-location"><option value="">-- 選擇位置 --</option>${locs.map(l=>`<option value="${l.name}" ${l.name===cl?'selected':''}>${l.name}</option>`).join('')}</select></div>`;
                 }else if(action==='return_shelf'){
+                    const sd=await api.getShelves(robotId);const shelves=sd.shelves||[];
+                    const cs=b&&b.action===action?b.params.shelf:'';
+                    paramsDiv.innerHTML=`<div class="form-group"><label>貨架</label><select class="param-shelf"><option value="">-- 選擇貨架 --</option>${shelves.map(s=>`<option value="${s.name}" ${s.name===cs?'selected':''}>${s.name}</option>`).join('')}</select></div>`;
+                }else if(action==='reset_shelf'){
                     const sd=await api.getShelves(robotId);const shelves=sd.shelves||[];
                     const cs=b&&b.action===action?b.params.shelf:'';
                     paramsDiv.innerHTML=`<div class="form-group"><label>貨架</label><select class="param-shelf"><option value="">-- 選擇貨架 --</option>${shelves.map(s=>`<option value="${s.name}" ${s.name===cs?'selected':''}>${s.name}</option>`).join('')}</select></div>`;
@@ -92,6 +96,10 @@ async function saveBindings(buttonId) {
             params={shelf:s,location:l};
         } else if(action==='return_shelf'){
             const s=pd.querySelector('.param-shelf')?.value||'';
+            params={shelf:s};
+        } else if(action==='reset_shelf'){
+            const s=pd.querySelector('.param-shelf')?.value;
+            if(!s){showToast(`${TRIGGER_LABELS[trigger]}: 請選擇貨架`,'error');valid=false;return;}
             params={shelf:s};
         } else if(action==='start_shortcut'){
             const v=pd.querySelector('.param-shortcut_id')?.value;

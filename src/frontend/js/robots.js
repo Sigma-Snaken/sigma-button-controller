@@ -5,7 +5,7 @@ const container = document.getElementById('robots');
 const AL = {
     move_to_location: '移動', return_home: '回家', speak: '語音',
     move_shelf: '搬貨架', return_shelf: '還貨架', dock_shelf: '對接',
-    undock_shelf: '放下', start_shortcut: '捷徑', cancel_command: '取消命令',
+    undock_shelf: '放下', reset_shelf: '重置位置', start_shortcut: '捷徑', cancel_command: '取消命令',
 };
 
 export async function initRobots(ws) {
@@ -29,6 +29,7 @@ function fmtAction(action, params) {
     if (action === 'speak') return label + ' → "' + (params.text || '') + '"';
     if (action === 'move_shelf') return label + ' → ' + (params.shelf || '') + ' → ' + (params.location || '');
     if (action === 'return_shelf') return label + (params.shelf ? ' → ' + params.shelf : '');
+    if (action === 'reset_shelf') return label + ' → ' + (params.shelf || '');
     if (action === 'start_shortcut') return label + ' → ' + (params.shortcut_id || '');
     return label;
 }
