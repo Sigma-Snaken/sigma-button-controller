@@ -308,7 +308,7 @@ async def _handle_offline_report(db, ws_manager, run_id, event, stop_index, time
         )
     elif event in ("completed", "failed"):
         await db.execute(
-            f"UPDATE route_runs SET status = ?, completed_at = ? WHERE id = ?",
+            "UPDATE route_runs SET status = ?, completed_at = ? WHERE id = ?",
             (event, now, run_id),
         )
         robot_id = row[1]

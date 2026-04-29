@@ -17,22 +17,20 @@ const STATUS_COLORS = {
 let _robots = [];
 let _buttons = [];
 let _locations = [];
+let _shelves = [];
 let _routeMode = 'online';
 
+const ACTIVE_REFRESH_EVENTS = [
+    'route:assigned', 'route:queued', 'route:moving', 'route:arrived',
+    'route:confirmed', 'route:timeout', 'route:finishing',
+    'route:offline_started', 'route:offline_report',
+];
+const TERMINAL_EVENTS = ['route:completed', 'route:cancelled', 'route:failed'];
+
 export async function initRoutes(ws) {
-    ws.on('route:assigned', () => renderActiveRuns());
-    ws.on('route:queued', () => renderActiveRuns());
-    ws.on('route:moving', () => renderActiveRuns());
-    ws.on('route:arrived', () => renderActiveRuns());
-    ws.on('route:confirmed', () => renderActiveRuns());
-    ws.on('route:timeout', () => renderActiveRuns());
-    ws.on('route:finishing', () => renderActiveRuns());
-    ws.on('route:completed', () => { renderActiveRuns(); renderHistory(); });
-    ws.on('route:cancelled', () => { renderActiveRuns(); renderHistory(); });
-    ws.on('route:failed', () => { renderActiveRuns(); renderHistory(); });
+    for (const evt of ACTIVE_REFRESH_EVENTS) ws.on(evt, () => renderActiveRuns());
+    for (const evt of TERMINAL_EVENTS) ws.on(evt, () => { renderActiveRuns(); renderHistory(); });
     ws.on('route:waiting', (data) => updateCountdown(data));
-    ws.on('route:offline_started', () => renderActiveRuns());
-    ws.on('route:offline_report', () => renderActiveRuns());
     await renderAll();
 }
 
@@ -47,8 +45,6 @@ function fmtShortTime(iso) {
     if (!iso) return '--';
     return new Date(iso).toLocaleTimeString('zh-TW', { hour12: false });
 }
-
-let _shelves = [];
 
 async function loadMeta() {
     try {

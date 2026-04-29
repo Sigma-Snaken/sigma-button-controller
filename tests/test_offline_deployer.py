@@ -97,10 +97,11 @@ class TestOfflineDeployer:
 
     @pytest.mark.asyncio
     async def test_deploy_process_not_started(self):
+        # pkill + nohup + PGREP_ATTEMPTS pgrep failures
         conn = _make_conn(run_results=[
-            _make_run_result(0),   # pkill
-            _make_run_result(0),   # nohup launch
-            _make_run_result(1),   # pgrep — no process found
+            _make_run_result(0),
+            _make_run_result(0),
+            *[_make_run_result(1) for _ in range(OfflineDeployer.PGREP_ATTEMPTS)],
         ])
 
         with patch("services.offline_deployer.asyncssh") as mock_ssh, \

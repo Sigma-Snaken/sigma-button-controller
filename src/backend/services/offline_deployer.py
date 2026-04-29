@@ -13,6 +13,8 @@ class OfflineDeployer:
     SSH_USER = "kachaka"
     REMOTE_SCRIPT_PATH = "/home/kachaka/route_executor.py"
     CONNECT_TIMEOUT = 10
+    PGREP_ATTEMPTS = 10
+    PGREP_INTERVAL = 0.2
 
     async def _connect(self, robot_ip: str) -> asyncssh.SSHClientConnection:
         """Create an SSH connection to the robot Playground container."""
@@ -32,35 +34,34 @@ class OfflineDeployer:
         """
         try:
             async with await self._connect(robot_ip) as conn:
-                # Kill any previously running instance
                 await conn.run("pkill -f route_executor.py || true")
 
-                # Upload script via SFTP
                 async with conn.start_sftp_client() as sftp:
                     async with sftp.open(self.REMOTE_SCRIPT_PATH, "w") as remote_file:
                         await remote_file.write(script_content)
 
-                # Launch in the background
                 await conn.run(
                     f"nohup python3 -u {self.REMOTE_SCRIPT_PATH} "
                     f"> /tmp/route.log 2>&1 &"
                 )
 
-                # Wait for the process to appear
-                await asyncio.sleep(2)
-
-                # Verify the process is running
-                result = await conn.run("pgrep -f route_executor.py")
-                if result.exit_status != 0:
-                    return {
-                        "ok": False,
-                        "error": "Process did not start after deploy",
-                    }
+                if not await self._wait_for_process(conn, "route_executor.py"):
+                    return {"ok": False, "error": "Process did not start after deploy"}
 
             return {"ok": True, "run_id": run_id, "robot_ip": robot_ip}
 
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
+
+    async def _wait_for_process(
+        self, conn: asyncssh.SSHClientConnection, pattern: str,
+    ) -> bool:
+        for _ in range(self.PGREP_ATTEMPTS):
+            result = await conn.run(f"pgrep -f {pattern}")
+            if result.exit_status == 0:
+                return True
+            await asyncio.sleep(self.PGREP_INTERVAL)
+        return False
 
     async def test_connection(self, robot_ip: str) -> dict:
         """Test SSH connectivity to the robot.

@@ -156,12 +156,7 @@ class RouteService:
                 # Determine if we should wait for button confirm
                 use_confirm = self._resolve_confirm_button(state, stop)
 
-                if use_confirm:
-                    confirmed, ieee = await self._wait_at_stop(state, timeout)
-                else:
-                    confirmed = False
-                    ieee = None
-                    await self._countdown(state, timeout)
+                confirmed, ieee = await self._wait_at_stop(state, timeout, accept_confirm=use_confirm)
 
                 departed_at = datetime.now(timezone.utc).isoformat()
                 timed_out = not confirmed and not state.cancelled
@@ -222,8 +217,9 @@ class RouteService:
         # Route-level setting
         return state.confirm_button_id is not None
 
-    async def _wait_at_stop(self, state: _RunState, timeout: int) -> tuple[bool, str | None]:
-        """Wait at a stop for button confirmation or timeout, broadcasting countdown."""
+    async def _wait_at_stop(
+        self, state: _RunState, timeout: int, *, accept_confirm: bool
+    ) -> tuple[bool, str | None]:
         state.waiting_event.clear()
         state._confirm_ieee = None
         remaining = timeout
@@ -241,33 +237,13 @@ class RouteService:
                 remaining -= 1
                 continue
 
-            # Event was set
             if state.cancelled:
                 return False, None
-            if state._confirm_ieee:
+            if accept_confirm and state._confirm_ieee:
                 return True, state._confirm_ieee
-            # Spurious wake — reset and continue
             state.waiting_event.clear()
 
         return False, None
-
-    async def _countdown(self, state: _RunState, timeout: int) -> None:
-        """Simple countdown when no confirm button is set."""
-        remaining = timeout
-        while remaining > 0 and not state.cancelled:
-            await self._ws.broadcast("route:waiting", {
-                "run_id": state.run_id,
-                "robot_id": state.robot_id,
-                "stop_index": state.current_stop,
-                "remaining": remaining,
-            })
-            try:
-                await asyncio.wait_for(state.waiting_event.wait(), timeout=1.0)
-                if state.cancelled:
-                    return
-            except asyncio.TimeoutError:
-                pass
-            remaining -= 1
 
     async def _notify_timeout(self, state: _RunState, stop_index: int, location: str) -> None:
         """Send notification that a stop timed out without confirmation."""
