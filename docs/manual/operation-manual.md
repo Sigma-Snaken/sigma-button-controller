@@ -160,6 +160,8 @@ graph LR
 - **Online 模式**（預設）：由 Pi 即時透過 gRPC 控制機器人，每一站可由 Zigbee 按鈕確認
 - **Offline 模式**：將整段路線打包為 Python 腳本，透過 SSH 部署到機器人 Playground 容器中執行；適用於 WiFi 訊號中斷區域，由 IMU 搖晃感測確認到站
 
+![路線分頁（Online 模式）](screenshots/07-routes-tab.png)
+
 ### 4.1 切換執行模式
 
 頁面頂部的「**路線模式**」切換按鈕可在 Online / Offline 之間切換。
@@ -174,6 +176,8 @@ graph LR
 ### 4.2 Offline 模式：SSH 與回報設定
 
 Offline 模式仰賴 Pi 與機器人之間的 SSH 通道（Port `26500`，用戶 `kachaka`）將腳本送進機器人的 Playground 容器執行。
+
+![路線分頁（Offline 模式）](screenshots/08-routes-offline-tab.png)
 
 1. **回報 IP**：在輸入框填入 Pi 對機器人可見的 URL（例如 `http://192.168.50.6:8000`），點擊「**儲存**」。腳本完成或回報事件時會 POST 到此 URL。
 2. **測試 SSH**：每台機器人列旁都有「**測試**」按鈕，點擊後：
