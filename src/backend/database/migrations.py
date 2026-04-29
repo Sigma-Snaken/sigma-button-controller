@@ -64,6 +64,53 @@ MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_rtt_robot ON rtt_logs(robot_name);
     CREATE INDEX IF NOT EXISTS idx_rtt_time ON rtt_logs(recorded_at);
     """,
+    # V4: Multi-stop route delivery
+    """
+    CREATE TABLE IF NOT EXISTS route_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        pinned_robot_id TEXT REFERENCES robots(id) ON DELETE SET NULL,
+        stops TEXT NOT NULL DEFAULT '[]',
+        default_timeout INTEGER NOT NULL DEFAULT 120,
+        confirm_button_id INTEGER REFERENCES buttons(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS route_runs (
+        id TEXT PRIMARY KEY,
+        template_id TEXT REFERENCES route_templates(id) ON DELETE SET NULL,
+        robot_id TEXT REFERENCES robots(id) ON DELETE SET NULL,
+        stops TEXT NOT NULL DEFAULT '[]',
+        default_timeout INTEGER NOT NULL DEFAULT 120,
+        confirm_button_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'queued',
+        current_stop INTEGER NOT NULL DEFAULT -1,
+        started_at TEXT,
+        completed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_route_runs_status ON route_runs(status);
+    CREATE INDEX IF NOT EXISTS idx_route_runs_robot ON route_runs(robot_id);
+    CREATE TABLE IF NOT EXISTS route_stop_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT NOT NULL REFERENCES route_runs(id) ON DELETE CASCADE,
+        stop_index INTEGER NOT NULL,
+        location_name TEXT NOT NULL,
+        arrived_at TEXT NOT NULL,
+        confirmed_at TEXT,
+        confirmed_by TEXT,
+        timed_out BOOLEAN NOT NULL DEFAULT 0,
+        departed_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_stop_logs_run ON route_stop_logs(run_id);
+    """,
+    # V5: Add shelf_name to route tables
+    """
+    ALTER TABLE route_templates ADD COLUMN shelf_name TEXT;
+    ALTER TABLE route_runs ADD COLUMN shelf_name TEXT;
+    """,
+    # V6: Offline route execution mode
+    """
+    ALTER TABLE route_runs ADD COLUMN execution_mode TEXT DEFAULT 'online';
+    """,
 ]
 
 

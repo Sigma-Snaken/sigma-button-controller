@@ -5,3 +5,4 @@ aiosqlite
 aiomqtt
 pytest
 pytest-asyncio
+asyncssh

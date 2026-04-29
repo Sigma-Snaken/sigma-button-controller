@@ -124,3 +124,108 @@ async def test_handle_button_action_unknown_button(setup):
         "action": "single",
     })
     assert len(queue.enqueue_calls) == 0
+
+
+class FakeRouteService:
+    def __init__(self):
+        self.confirm_results = {}
+
+    def try_confirm(self, ieee_addr):
+        return self.confirm_results.get(ieee_addr, False)
+
+
+class FakeRouteDispatcher:
+    def __init__(self):
+        self.dispatch_calls = []
+
+    async def dispatch(self, **kwargs):
+        self.dispatch_calls.append(kwargs)
+        return {"ok": True, "run_id": "fake-run", "robot_id": "r1", "status": "assigned"}
+
+
+@pytest.mark.asyncio
+async def test_button_action_intercepted_by_route(setup):
+    mgr, db, queue, ws = setup
+    route_svc = FakeRouteService()
+    route_svc.confirm_results["0x00124b00cccccc"] = True
+    mgr.set_route_service(route_svc)
+
+    await db.execute(
+        "INSERT INTO robots (id, name, ip, enabled, created_at) VALUES (?, ?, ?, 1, datetime('now'))",
+        ("r1", "Robot", "1.2.3.4"),
+    )
+    await db.execute(
+        "INSERT INTO buttons (ieee_addr, name, paired_at) VALUES (?, ?, datetime('now'))",
+        ("0x00124b00cccccc", "Test Button"),
+    )
+    await db.execute(
+        "INSERT INTO bindings (button_id, trigger, robot_id, action, params, enabled, created_at) "
+        "VALUES (1, 'single', 'r1', 'return_home', '{}', 1, datetime('now'))"
+    )
+    await db.commit()
+
+    await mgr.handle_message({
+        "type": "button_action",
+        "ieee_addr": "0x00124b00cccccc",
+        "action": "single",
+    })
+    assert len(queue.enqueue_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_button_action_not_intercepted_when_no_route(setup):
+    mgr, db, queue, ws = setup
+    route_svc = FakeRouteService()
+    route_svc.confirm_results["0x00124b00cccccc"] = False
+    mgr.set_route_service(route_svc)
+
+    await db.execute(
+        "INSERT INTO robots (id, name, ip, enabled, created_at) VALUES (?, ?, ?, 1, datetime('now'))",
+        ("r1", "Robot", "1.2.3.4"),
+    )
+    await db.execute(
+        "INSERT INTO buttons (ieee_addr, name, paired_at) VALUES (?, ?, datetime('now'))",
+        ("0x00124b00cccccc", "Test Button"),
+    )
+    await db.execute(
+        "INSERT INTO bindings (button_id, trigger, robot_id, action, params, enabled, created_at) "
+        "VALUES (1, 'single', 'r1', 'return_home', '{}', 1, datetime('now'))"
+    )
+    await db.commit()
+
+    await mgr.handle_message({
+        "type": "button_action",
+        "ieee_addr": "0x00124b00cccccc",
+        "action": "single",
+    })
+    assert len(queue.enqueue_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_start_route_action(setup):
+    mgr, db, queue, ws = setup
+    route_dispatcher = FakeRouteDispatcher()
+    mgr.set_route_dispatcher(route_dispatcher)
+
+    await db.execute(
+        "INSERT INTO robots (id, name, ip, enabled, created_at) VALUES (?, ?, ?, 1, datetime('now'))",
+        ("r1", "Robot", "1.2.3.4"),
+    )
+    await db.execute(
+        "INSERT INTO buttons (ieee_addr, name, paired_at) VALUES (?, ?, datetime('now'))",
+        ("0x00124b00eeeeee", "Macro Button"),
+    )
+    await db.execute(
+        "INSERT INTO bindings (button_id, trigger, robot_id, action, params, enabled, created_at) "
+        "VALUES (1, 'single', 'r1', 'start_route', '{\"template_id\": \"tpl-1\"}', 1, datetime('now'))"
+    )
+    await db.commit()
+
+    await mgr.handle_message({
+        "type": "button_action",
+        "ieee_addr": "0x00124b00eeeeee",
+        "action": "single",
+    })
+    assert len(queue.enqueue_calls) == 0
+    assert len(route_dispatcher.dispatch_calls) == 1
+    assert route_dispatcher.dispatch_calls[0]["template_id"] == "tpl-1"

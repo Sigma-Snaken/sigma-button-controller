@@ -62,4 +62,24 @@ export const api = {
     cancelCurrent: (robotId) => request('POST', `/queue/cancel/${robotId}`),
     getQueueSettings: () => request('GET', '/settings/queue'),
     updateQueueSettings: (data) => request('PUT', '/settings/queue', data),
+
+    // Offline route
+    getRouteMode: () => request('GET', '/settings/route-mode'),
+    updateRouteMode: (data) => request('PUT', '/settings/route-mode', data),
+    getPiUrl: () => request('GET', '/settings/pi-url'),
+    updatePiUrl: (data) => request('PUT', '/settings/pi-url', data),
+    testSSH: (data) => request('POST', '/routes/offline/test-ssh', data),
+    getPublicKey: () => request('GET', '/routes/offline/public-key'),
+
+    // Routes
+    listRouteTemplates: () => request('GET', '/routes/templates'),
+    createRouteTemplate: (data) => request('POST', '/routes/templates', data),
+    updateRouteTemplate: (id, data) => request('PUT', `/routes/templates/${id}`, data),
+    deleteRouteTemplate: (id) => request('DELETE', `/routes/templates/${id}`),
+    dispatchRoute: (data) => request('POST', '/routes/dispatch', data),
+    cancelRoute: (runId) => request('POST', `/routes/runs/${runId}/cancel`),
+    listActiveRuns: () => request('GET', '/routes/runs'),
+    getRunDetail: (runId) => request('GET', `/routes/runs/${runId}`),
+    getRouteHistory: (page = 1) => request('GET', `/routes/history?page=${page}`),
+    getDispatcherStatus: () => request('GET', '/routes/dispatcher/status'),
 };

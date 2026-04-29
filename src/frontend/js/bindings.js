@@ -7,7 +7,7 @@ const TRIGGER_LABELS = {single:'單擊',double:'雙擊',long:'長按'};
 const ACTIONS = [
     {value:'move_to_location',label:'移動到位置'},{value:'return_home',label:'回充電座'},{value:'speak',label:'語音播報'},
     {value:'move_shelf',label:'搬運貨架'},{value:'return_shelf',label:'歸還貨架'},{value:'dock_shelf',label:'對接貨架'},
-    {value:'undock_shelf',label:'放下貨架'},{value:'start_shortcut',label:'執行捷徑'},{value:'cancel_command',label:'取消命令'},
+    {value:'undock_shelf',label:'放下貨架'},{value:'start_shortcut',label:'執行捷徑'},{value:'start_route',label:'執行路線'},{value:'cancel_command',label:'取消命令'},
 ];
 
 export async function initBindings() { await renderBindings(); }
@@ -59,6 +59,10 @@ async function loadBindings(buttonId,robots) {
                     const scs=Array.isArray(raw)?raw:Object.entries(raw).map(([id,name])=>({id,name}));
                     const cur=b&&b.action===action?b.params.shortcut_id:'';
                     paramsDiv.innerHTML=`<div class="form-group"><label>捷徑</label><select class="param-shortcut_id"><option value="">-- 選擇捷徑 --</option>${scs.map(s=>`<option value="${s.id}" ${s.id===cur?'selected':''}>${s.name||s.id}</option>`).join('')}</select></div>`;
+                }else if(action==='start_route'){
+                    const templates=await api.listRouteTemplates();
+                    const cur=b&&b.action===action?b.params.template_id:'';
+                    paramsDiv.innerHTML=`<div class="form-group"><label>路線模板</label><select class="param-template_id"><option value="">-- 選擇路線 --</option>${templates.map(t=>`<option value="${t.id}" ${t.id===cur?'selected':''}>${t.name} (${t.stops.length}站)</option>`).join('')}</select></div>`;
                 }
             }catch(e){paramsDiv.innerHTML=`<p style="color:var(--danger);font-size:0.8rem">無法取得資料: ${e.message}</p>`;}
         };
@@ -93,6 +97,10 @@ async function saveBindings(buttonId) {
             const v=pd.querySelector('.param-shortcut_id')?.value;
             if(!v){showToast(`${TRIGGER_LABELS[trigger]}: 請選擇捷徑`,'error');valid=false;return;}
             params={shortcut_id:v};
+        } else if(action==='start_route'){
+            const v=pd.querySelector('.param-template_id')?.value;
+            if(!v){showToast(`${TRIGGER_LABELS[trigger]}: 請選擇路線模板`,'error');valid=false;return;}
+            params={template_id:v};
         }
         // return_home, dock_shelf, undock_shelf: params stays {}
         payload[trigger]={robot_id:robotId,action,params};

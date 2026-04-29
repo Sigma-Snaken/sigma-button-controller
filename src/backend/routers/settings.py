@@ -2,7 +2,7 @@ import json
 import os
 
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from main import _state
@@ -10,6 +10,23 @@ from utils.logger import get_logger
 
 logger = get_logger("routers.settings")
 router = APIRouter()
+
+
+async def _get_setting(key: str, default: str = "") -> str:
+    db = _state["db"]
+    async with db.execute("SELECT value FROM settings WHERE key = ?", (key,)) as cursor:
+        row = await cursor.fetchone()
+    return row[0] if row else default
+
+
+async def _set_setting(key: str, value: str) -> None:
+    db = _state["db"]
+    await db.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+    await db.commit()
 
 
 @router.get("/system/info")
@@ -90,27 +107,12 @@ class ToggleConfig(BaseModel):
 
 @router.get("/settings/rtt-logger")
 async def get_rtt_logger_settings():
-    db = _state["db"]
-    enabled = True  # default
-    async with db.execute(
-        "SELECT value FROM settings WHERE key = 'rtt_logger_enabled'"
-    ) as cursor:
-        row = await cursor.fetchone()
-    if row:
-        enabled = row[0] == "true"
-    return {"enabled": enabled}
+    return {"enabled": (await _get_setting("rtt_logger_enabled", "true")) == "true"}
 
 
 @router.put("/settings/rtt-logger")
 async def update_rtt_logger_settings(body: ToggleConfig):
-    db = _state["db"]
-    value = "true" if body.enabled else "false"
-    await db.execute(
-        "INSERT INTO settings (key, value) VALUES ('rtt_logger_enabled', ?) "
-        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        (value,),
-    )
-    await db.commit()
+    await _set_setting("rtt_logger_enabled", "true" if body.enabled else "false")
     rtt_logger = _state.get("rtt_logger")
     if rtt_logger:
         rtt_logger.set_enabled(body.enabled)
@@ -119,31 +121,56 @@ async def update_rtt_logger_settings(body: ToggleConfig):
 
 @router.get("/settings/queue")
 async def get_queue_settings():
-    db = _state["db"]
-    enabled = True  # default
-    async with db.execute(
-        "SELECT value FROM settings WHERE key = 'queue_enabled'"
-    ) as cursor:
-        row = await cursor.fetchone()
-    if row:
-        enabled = row[0] == "true"
-    return {"enabled": enabled}
+    return {"enabled": (await _get_setting("queue_enabled", "true")) == "true"}
 
 
 @router.put("/settings/queue")
 async def update_queue_settings(body: ToggleConfig):
-    db = _state["db"]
-    enabled = body.enabled
-    value = "true" if enabled else "false"
-    await db.execute(
-        "INSERT INTO settings (key, value) VALUES ('queue_enabled', ?) "
-        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        (value,),
-    )
-    await db.commit()
+    await _set_setting("queue_enabled", "true" if body.enabled else "false")
     queue = _state.get("command_queue")
     if queue:
-        queue.set_enabled(enabled)
-    return {"ok": True, "enabled": enabled}
+        queue.set_enabled(body.enabled)
+    return {"ok": True, "enabled": body.enabled}
+
+
+@router.get("/settings/route-mode")
+async def get_route_mode():
+    return {"mode": await _get_setting("route_mode", "online")}
+
+
+class RouteModeConfig(BaseModel):
+    mode: str  # "online" or "offline"
+
+
+@router.put("/settings/route-mode")
+async def update_route_mode(body: RouteModeConfig):
+    if body.mode not in ("online", "offline"):
+        raise HTTPException(400, "Mode must be 'online' or 'offline'")
+    await _set_setting("route_mode", body.mode)
+    dispatcher = _state.get("route_dispatcher")
+    if dispatcher:
+        dispatcher.set_route_mode(body.mode)
+    return {"ok": True, "mode": body.mode}
+
+
+@router.get("/settings/pi-url")
+async def get_pi_url():
+    return {"url": await _get_setting("pi_url")}
+
+
+class PiUrlConfig(BaseModel):
+    url: str
+
+
+@router.put("/settings/pi-url")
+async def update_pi_url(body: PiUrlConfig):
+    url = body.url.strip().rstrip("/")
+    if url and not url.startswith("http"):
+        url = f"http://{url}"
+    await _set_setting("pi_url", url)
+    dispatcher = _state.get("route_dispatcher")
+    if dispatcher:
+        dispatcher.set_pi_url(url)
+    return {"ok": True, "url": url}
 
 
