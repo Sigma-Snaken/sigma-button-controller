@@ -112,7 +112,7 @@ async def lifespan(app: FastAPI):
     mqtt_service = None
     if mqtt_host:
         mqtt_port = int(os.environ.get("MQTT_PORT", "1883"))
-        mqtt_service = MQTTService(host=mqtt_host, port=mqtt_port)
+        mqtt_service = MQTTService(host=mqtt_host, port=mqtt_port, ws_manager=ws_manager)
         mqtt_service.set_handler(button_manager.handle_message)
         await mqtt_service.start()
 
@@ -198,7 +198,11 @@ app.include_router(ws.router)
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True}
+    mqtt = _state.get("mqtt_service")
+    return {
+        "ok": True,
+        "mqtt_connected": mqtt.is_connected() if mqtt else None,
+    }
 
 
 frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
