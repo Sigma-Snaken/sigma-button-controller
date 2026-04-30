@@ -225,14 +225,14 @@ async def history(
 
     async with db.execute(
         "SELECT COUNT(*) FROM route_runs "
-        "WHERE status IN ('completed', 'cancelled', 'failed')"
+        "WHERE status IN ('completed', 'cancelled', 'failed', 'interrupted')"
     ) as cursor:
         total = (await cursor.fetchone())[0]
 
     async with db.execute(
         "SELECT id, template_id, robot_id, stops, default_timeout, "
         "status, current_stop, started_at, completed_at "
-        "FROM route_runs WHERE status IN ('completed', 'cancelled', 'failed') "
+        "FROM route_runs WHERE status IN ('completed', 'cancelled', 'failed', 'interrupted') "
         "ORDER BY completed_at DESC LIMIT ? OFFSET ?",
         (per_page, offset),
     ) as cursor:
