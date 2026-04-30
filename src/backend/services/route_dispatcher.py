@@ -184,8 +184,8 @@ class RouteDispatcher:
     async def cancel(self, run_id: str) -> dict:
         now = datetime.now(timezone.utc).isoformat()
 
-        # status guard prevents overwriting an already-terminal run
-        async def _commit_cancelled():
+        async def _mark_cancelled_if_active():
+            # Status guard skips runs already in a terminal state.
             await self._db.execute(
                 "UPDATE route_runs SET status = 'cancelled', completed_at = ? "
                 "WHERE id = ? AND status IN ('queued','assigned','running')",
@@ -196,25 +196,24 @@ class RouteDispatcher:
 
         if run_id in self._queue:
             self._queue.remove(run_id)
-            await _commit_cancelled()
+            await _mark_cancelled_if_active()
             return {"ok": True}
 
         for robot_id, active_run_id in self._active.items():
             if active_run_id == run_id:
-                # Online path — best-effort tell RouteService, then always write DB.
-                # If RouteService.cancel_run silently noops (e.g. _runs is empty
-                # after a server restart), the DB still ends up cancelled
-                # (CORNER-027 fix).
+                # Best-effort tell RouteService (online runs only), then ALWAYS
+                # write DB — RouteService.cancel_run can silently noop when its
+                # in-memory _runs map is empty after a restart (CORNER-027).
                 async with self._db.execute(
                     "SELECT execution_mode FROM route_runs WHERE id = ?", (run_id,)
                 ) as cursor:
                     row = await cursor.fetchone()
-
-                if row and row[0] != "offline" and self._route_service:
+                is_online = row and row[0] != "offline"
+                if is_online and self._route_service:
                     await self._route_service.cancel_run(run_id)
 
                 self._active.pop(robot_id, None)
-                await _commit_cancelled()
+                await _mark_cancelled_if_active()
                 return {"ok": True}
 
         return {"ok": False, "error": "Run not found"}
