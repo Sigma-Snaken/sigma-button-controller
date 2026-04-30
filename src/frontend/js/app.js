@@ -79,6 +79,15 @@ export function showModal(title, bodyHtml, onConfirm) {
     return overlay;
 }
 
+// MQTT broker connectivity banner — fires on broker stop/start
+ws.on('mqtt:state', (data) => {
+    if (data.connected) {
+        showToast('MQTT 連線恢復', 'success');
+    } else {
+        showToast('MQTT 中斷 — 按鈕暫時無法觸發', 'error');
+    }
+});
+
 // Load system info bar
 api.getSystemInfo().then(info => {
     const parts = [];
