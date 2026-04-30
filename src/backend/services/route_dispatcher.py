@@ -220,26 +220,36 @@ class RouteDispatcher:
         }
 
     async def rebuild_from_db(self) -> None:
-        # Mark stale offline_running as completed (no way to resume after restart)
         now = datetime.now(timezone.utc).isoformat()
+
+        # Offline runs cannot resume after restart — mark completed (existing behaviour).
         cursor = await self._db.execute(
             "UPDATE route_runs SET status = 'completed', completed_at = ? "
             "WHERE status = 'offline_running'", (now,),
         )
         if cursor.rowcount:
             logger.info(f"Cleaned {cursor.rowcount} stale offline_running runs")
-            await self._db.commit()
 
+        # Online runs cannot resume either — RouteService task state lives in memory
+        # and is gone after the restart. Mark them interrupted so dispatcher.active
+        # is not silently re-populated (CORNER-013/028 fix).
+        cursor = await self._db.execute(
+            "UPDATE route_runs SET status = 'interrupted', completed_at = ? "
+            "WHERE status IN ('assigned', 'running')", (now,),
+        )
+        if cursor.rowcount:
+            logger.warning(
+                f"Marked {cursor.rowcount} interrupted online run(s) — "
+                f"server was restarted mid-route, manual robot recovery may be needed"
+            )
+
+        await self._db.commit()
+
+        # Re-load only queued runs. Active map stays empty: an interrupted run
+        # is terminal and there is nothing for the dispatcher to track.
         async with self._db.execute(
             "SELECT id FROM route_runs WHERE status = 'queued' ORDER BY started_at"
         ) as cursor:
             rows = await cursor.fetchall()
         self._queue = [row[0] for row in rows]
-        async with self._db.execute(
-            "SELECT id, robot_id FROM route_runs WHERE status IN ('assigned', 'running')"
-        ) as cursor:
-            rows = await cursor.fetchall()
-        for run_id, robot_id in rows:
-            if robot_id:
-                self._active[robot_id] = run_id
-        logger.info(f"Rebuilt dispatcher: {len(self._queue)} queued, {len(self._active)} active")
+        logger.info(f"Rebuilt dispatcher: {len(self._queue)} queued, 0 active")
