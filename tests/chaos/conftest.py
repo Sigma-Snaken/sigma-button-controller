@@ -102,16 +102,25 @@ class ChaosOps:
         rc, out, _ = self.ssh(f"docker logs --tail={n} {APP_CONTAINER} 2>&1")
         return out if rc == 0 else ""
 
-    def wait_app_healthy(self, timeout=30):
+    @staticmethod
+    def _poll_until(predicate, timeout, interval=1):
+        """Call predicate() once per `interval`s until it returns truthy or `timeout` elapses.
+        Exceptions inside predicate are swallowed (treated as 'not ready yet')."""
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
-                if httpx.get(f"{self.base_url}/api/health", timeout=3).status_code == 200:
+                if predicate():
                     return True
             except Exception:
                 pass
-            time.sleep(1)
+            time.sleep(interval)
         return False
+
+    def wait_app_healthy(self, timeout=30):
+        return self._poll_until(
+            lambda: httpx.get(f"{self.base_url}/api/health", timeout=3).status_code == 200,
+            timeout=timeout,
+        )
 
     # ── Disruption: robot connection (no sudo needed) ──────────────────
     def patch_robot_ip(self, new_ip):
@@ -225,16 +234,10 @@ class ChaosOps:
 
     # ── Wait helpers ──────────────────────────────────────────────────
     def wait_robot_online(self, timeout=30):
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            try:
-                r = self.get_robot()
-                if r and r.get("online") and r.get("connection_state") == "connected":
-                    return True
-            except Exception:
-                pass
-            time.sleep(1)
-        return False
+        def _is_online():
+            r = self.get_robot()
+            return bool(r and r.get("online") and r.get("connection_state") == "connected")
+        return self._poll_until(_is_online, timeout=timeout)
 
 
 @pytest.fixture
