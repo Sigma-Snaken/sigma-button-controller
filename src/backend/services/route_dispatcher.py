@@ -182,33 +182,41 @@ class RouteDispatcher:
             await self._route_service.start_run(next_run_id, robot_id)
 
     async def cancel(self, run_id: str) -> dict:
-        if run_id in self._queue:
-            self._queue.remove(run_id)
+        now = datetime.now(timezone.utc).isoformat()
+
+        # status guard prevents overwriting an already-terminal run
+        async def _commit_cancelled():
             await self._db.execute(
-                "UPDATE route_runs SET status = 'cancelled', completed_at = ? WHERE id = ?",
-                (datetime.now(timezone.utc).isoformat(), run_id),
+                "UPDATE route_runs SET status = 'cancelled', completed_at = ? "
+                "WHERE id = ? AND status IN ('queued','assigned','running')",
+                (now, run_id),
             )
             await self._db.commit()
             await self._ws.broadcast("route:cancelled", {"run_id": run_id})
+
+        if run_id in self._queue:
+            self._queue.remove(run_id)
+            await _commit_cancelled()
             return {"ok": True}
+
         for robot_id, active_run_id in self._active.items():
             if active_run_id == run_id:
-                # Check if offline run — cancel directly in DB
+                # Online path — best-effort tell RouteService, then always write DB.
+                # If RouteService.cancel_run silently noops (e.g. _runs is empty
+                # after a server restart), the DB still ends up cancelled
+                # (CORNER-027 fix).
                 async with self._db.execute(
                     "SELECT execution_mode FROM route_runs WHERE id = ?", (run_id,)
                 ) as cursor:
                     row = await cursor.fetchone()
-                if row and row[0] == "offline":
-                    self._active.pop(robot_id, None)
-                    await self._db.execute(
-                        "UPDATE route_runs SET status = 'cancelled', completed_at = ? WHERE id = ?",
-                        (datetime.now(timezone.utc).isoformat(), run_id),
-                    )
-                    await self._db.commit()
-                    await self._ws.broadcast("route:cancelled", {"run_id": run_id})
-                elif self._route_service:
+
+                if row and row[0] != "offline" and self._route_service:
                     await self._route_service.cancel_run(run_id)
+
+                self._active.pop(robot_id, None)
+                await _commit_cancelled()
                 return {"ok": True}
+
         return {"ok": False, "error": "Run not found"}
 
     def get_status(self) -> dict:
