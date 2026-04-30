@@ -54,15 +54,28 @@ def parse_zigbee_message(topic: str, payload: str) -> dict | None:
 
 
 class MQTTService:
-    def __init__(self, host: str = "localhost", port: int = 1883):
+    def __init__(self, host: str = "localhost", port: int = 1883, ws_manager=None):
         self._host = host
         self._port = port
         self._client: aiomqtt.Client | None = None
         self._task: asyncio.Task | None = None
         self._on_message: Callable[[dict], Awaitable[None]] | None = None
+        self._ws = ws_manager
+        self._connected = False
 
     def set_handler(self, handler: Callable[[dict], Awaitable[None]]) -> None:
         self._on_message = handler
+
+    def is_connected(self) -> bool:
+        return self._connected
+
+    async def _set_connected(self, state: bool) -> None:
+        if self._connected == state:
+            return
+        self._connected = state
+        logger.info(f"MQTT connection state -> {'connected' if state else 'disconnected'}")
+        if self._ws:
+            await self._ws.broadcast("mqtt:state", {"connected": state})
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._listen())
@@ -75,6 +88,7 @@ class MQTTService:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        await self._set_connected(False)
         logger.info("MQTT service stopped")
 
     async def publish(self, topic: str, payload: dict) -> None:
@@ -95,6 +109,7 @@ class MQTTService:
                     self._client = client
                     await client.subscribe("zigbee2mqtt/#")
                     logger.info("Subscribed to zigbee2mqtt/#")
+                    await self._set_connected(True)
                     async for message in client.messages:
                         topic = str(message.topic)
                         payload = message.payload.decode() if message.payload else ""
@@ -107,7 +122,9 @@ class MQTTService:
             except aiomqtt.MqttError as e:
                 logger.warning(f"MQTT connection lost: {e}. Reconnecting in 5s...")
                 self._client = None
+                await self._set_connected(False)
                 await asyncio.sleep(5)
             except asyncio.CancelledError:
                 self._client = None
+                await self._set_connected(False)
                 raise
