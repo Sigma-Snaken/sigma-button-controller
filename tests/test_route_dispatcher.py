@@ -168,3 +168,120 @@ async def test_rebuild_from_db(setup):
     dispatcher2.set_route_service(route_svc)
     await dispatcher2.rebuild_from_db()
     assert "run-orphan" in dispatcher2._queue
+
+
+# ── CORNER-013/028 — server restart mid-route, no zombie revival ─────
+
+
+@pytest.mark.asyncio
+async def test_rebuild_marks_online_running_as_interrupted(setup):
+    """assigned/running rows must be marked terminal — RouteService cannot resume them."""
+    dispatcher, route_svc, ws, rm, db = setup
+    import json
+    await db.execute(
+        "INSERT INTO route_runs (id, robot_id, stops, default_timeout, status, current_stop) "
+        "VALUES ('r-running', 'r1', ?, 120, 'running', 0)",
+        (json.dumps([{"name": "A"}, {"name": "B"}]),),
+    )
+    await db.execute(
+        "INSERT INTO route_runs (id, robot_id, stops, default_timeout, status, current_stop) "
+        "VALUES ('r-assigned', 'r2', ?, 120, 'assigned', -1)",
+        (json.dumps([{"name": "C"}]),),
+    )
+    await db.commit()
+
+    dispatcher2 = RouteDispatcher(db=db, ws_manager=ws, robot_manager=rm)
+    dispatcher2.set_route_service(route_svc)
+    await dispatcher2.rebuild_from_db()
+
+    async with db.execute(
+        "SELECT id, status, completed_at FROM route_runs WHERE id IN ('r-running', 'r-assigned') ORDER BY id"
+    ) as c:
+        rows = await c.fetchall()
+    statuses = {r[0]: (r[1], r[2]) for r in rows}
+    assert statuses["r-running"][0] == "interrupted"
+    assert statuses["r-running"][1] is not None  # completed_at filled in
+    assert statuses["r-assigned"][0] == "interrupted"
+    # _active is NOT repopulated with these runs — they are terminal now
+    assert "r1" not in dispatcher2._active
+    assert "r2" not in dispatcher2._active
+
+
+@pytest.mark.asyncio
+async def test_rebuild_still_marks_offline_running_as_completed(setup):
+    """offline_running cleanup is the existing behaviour and must still work."""
+    dispatcher, route_svc, ws, rm, db = setup
+    import json
+    await db.execute(
+        "INSERT INTO route_runs (id, robot_id, stops, default_timeout, status, current_stop, execution_mode) "
+        "VALUES ('r-off', 'r1', ?, 120, 'offline_running', 0, 'offline')",
+        (json.dumps([{"name": "A"}]),),
+    )
+    await db.commit()
+
+    dispatcher2 = RouteDispatcher(db=db, ws_manager=ws, robot_manager=rm)
+    dispatcher2.set_route_service(route_svc)
+    await dispatcher2.rebuild_from_db()
+
+    async with db.execute("SELECT status FROM route_runs WHERE id = 'r-off'") as c:
+        row = await c.fetchone()
+    assert row[0] == "completed"
+
+
+# ── CORNER-027 — cancel survives stale RouteService in-memory state ──
+
+
+class SilentRouteService(FakeRouteService):
+    """Mimics route_service.cancel_run silently noop'ing when state is gone."""
+    async def cancel_run(self, run_id):
+        # silent return — simulating empty self._runs after restart
+        pass
+
+
+@pytest.mark.asyncio
+async def test_cancel_active_writes_db_even_when_route_service_silent(setup):
+    """If RouteService.cancel_run silently noops, dispatcher must still write DB."""
+    dispatcher, _, ws, rm, db = setup
+    import json
+    await db.execute(
+        "INSERT INTO route_runs (id, robot_id, stops, default_timeout, status, current_stop) "
+        "VALUES ('r-stale', 'r1', ?, 120, 'running', 0)",
+        (json.dumps([{"name": "A"}]),),
+    )
+    await db.commit()
+
+    dispatcher._active = {"r1": "r-stale"}
+    dispatcher.set_route_service(SilentRouteService())
+
+    result = await dispatcher.cancel("r-stale")
+    assert result["ok"] is True
+
+    async with db.execute(
+        "SELECT status, completed_at FROM route_runs WHERE id = 'r-stale'"
+    ) as c:
+        row = await c.fetchone()
+    assert row[0] == "cancelled"
+    assert row[1] is not None
+    assert "r1" not in dispatcher._active
+
+
+@pytest.mark.asyncio
+async def test_cancel_does_not_overwrite_terminal_status(setup):
+    """A run already in a terminal state must not be overwritten by cancel."""
+    dispatcher, _, ws, rm, db = setup
+    import json
+    await db.execute(
+        "INSERT INTO route_runs (id, robot_id, stops, default_timeout, status, current_stop, completed_at) "
+        "VALUES ('r-done', 'r1', ?, 120, 'completed', 0, '2026-04-30T00:00:00Z')",
+        (json.dumps([{"name": "A"}]),),
+    )
+    await db.commit()
+
+    dispatcher._active = {"r1": "r-done"}
+    dispatcher.set_route_service(SilentRouteService())
+
+    await dispatcher.cancel("r-done")
+
+    async with db.execute("SELECT status FROM route_runs WHERE id = 'r-done'") as c:
+        row = await c.fetchone()
+    assert row[0] == "completed"  # NOT overwritten

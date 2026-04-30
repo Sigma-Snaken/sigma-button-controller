@@ -223,16 +223,19 @@ async def history(
     db = _state["db"]
     offset = (page - 1) * per_page
 
+    # Terminal statuses shown in history. Keep in sync with route_dispatcher
+    # rebuild_from_db / cancel paths.
+    history_filter = "status IN ('completed', 'cancelled', 'failed', 'interrupted')"
+
     async with db.execute(
-        "SELECT COUNT(*) FROM route_runs "
-        "WHERE status IN ('completed', 'cancelled', 'failed')"
+        f"SELECT COUNT(*) FROM route_runs WHERE {history_filter}"
     ) as cursor:
         total = (await cursor.fetchone())[0]
 
     async with db.execute(
         "SELECT id, template_id, robot_id, stops, default_timeout, "
         "status, current_stop, started_at, completed_at "
-        "FROM route_runs WHERE status IN ('completed', 'cancelled', 'failed') "
+        f"FROM route_runs WHERE {history_filter} "
         "ORDER BY completed_at DESC LIMIT ? OFFSET ?",
         (per_page, offset),
     ) as cursor:

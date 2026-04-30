@@ -38,6 +38,7 @@ class ActionExecutor:
                 "speak": lambda: cmds.speak(params["text"]),
                 "dock_shelf": lambda: cmds.dock_shelf(),
                 "undock_shelf": lambda: cmds.undock_shelf(),
+                "reset_shelf": lambda: cmds.reset_shelf_pose(params["shelf"]),
                 "start_shortcut": lambda: cmds.start_shortcut(params["shortcut_id"]),
             }
 

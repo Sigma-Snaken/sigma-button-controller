@@ -5,11 +5,13 @@ const container = document.getElementById('routes');
 
 const STATUS_LABELS = {
     completed: '完成', cancelled: '取消', failed: '失敗',
+    interrupted: '中斷',
     queued: '排隊中', assigned: '已指派', running: '執行中',
     offline_running: '離線執行中',
 };
 const STATUS_COLORS = {
     completed: 'var(--success)', cancelled: 'var(--warning)', failed: 'var(--coral)',
+    interrupted: 'var(--warning)',
     queued: 'var(--text-muted)', assigned: 'var(--amber)', running: 'var(--amber)',
     offline_running: 'var(--teal)',
 };

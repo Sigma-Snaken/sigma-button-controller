@@ -11,8 +11,9 @@ from services.robot_manager import RobotManager
 class FakeConnection:
     def __init__(self, ip):
         self.ip = ip
+        self.serial = "KCK-TEST"
     def ping(self):
-        return {"ok": True, "serial": "KCK-TEST"}
+        return {"ok": True, "serial": self.serial}
 
 
 class FakeCommands:
@@ -42,6 +43,9 @@ class FakeCommands:
     def start_shortcut(self, shortcut_id):
         self.last_call = ("start_shortcut", shortcut_id)
         return {"ok": True, "action": "start_shortcut"}
+    def reset_shelf_pose(self, shelf_name):
+        self.last_call = ("reset_shelf_pose", shelf_name)
+        return {"ok": True, "action": "reset_shelf_pose", "target": shelf_name}
 
 
 class FakeQueries:
@@ -57,28 +61,40 @@ def executor():
     return ActionExecutor(mgr)
 
 
-def test_move_to_location(executor):
-    result = executor.execute("r1", "move_to_location", {"name": "Kitchen"})
+@pytest.mark.asyncio
+async def test_move_to_location(executor):
+    result = await executor.execute("r1", "move_to_location", {"name": "Kitchen"})
     assert result["ok"] is True
 
-def test_return_home(executor):
-    result = executor.execute("r1", "return_home", {})
+@pytest.mark.asyncio
+async def test_return_home(executor):
+    result = await executor.execute("r1", "return_home", {})
     assert result["ok"] is True
 
-def test_speak(executor):
-    result = executor.execute("r1", "speak", {"text": "你好"})
+@pytest.mark.asyncio
+async def test_speak(executor):
+    result = await executor.execute("r1", "speak", {"text": "你好"})
     assert result["ok"] is True
 
-def test_start_shortcut(executor):
-    result = executor.execute("r1", "start_shortcut", {"shortcut_id": "sc-1"})
+@pytest.mark.asyncio
+async def test_start_shortcut(executor):
+    result = await executor.execute("r1", "start_shortcut", {"shortcut_id": "sc-1"})
     assert result["ok"] is True
 
-def test_unknown_action(executor):
-    result = executor.execute("r1", "fly_away", {})
+@pytest.mark.asyncio
+async def test_reset_shelf(executor):
+    result = await executor.execute("r1", "reset_shelf", {"shelf": "ShelfA"})
+    assert result["ok"] is True
+    assert result["target"] == "ShelfA"
+
+@pytest.mark.asyncio
+async def test_unknown_action(executor):
+    result = await executor.execute("r1", "fly_away", {})
     assert result["ok"] is False
     assert "Unknown action" in result["error"]
 
-def test_unknown_robot(executor):
-    result = executor.execute("nonexistent", "return_home", {})
+@pytest.mark.asyncio
+async def test_unknown_robot(executor):
+    result = await executor.execute("nonexistent", "return_home", {})
     assert result["ok"] is False
     assert "not found" in result["error"]

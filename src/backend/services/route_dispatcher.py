@@ -182,33 +182,40 @@ class RouteDispatcher:
             await self._route_service.start_run(next_run_id, robot_id)
 
     async def cancel(self, run_id: str) -> dict:
-        if run_id in self._queue:
-            self._queue.remove(run_id)
+        now = datetime.now(timezone.utc).isoformat()
+
+        async def _mark_cancelled_if_active():
+            # Status guard skips runs already in a terminal state.
             await self._db.execute(
-                "UPDATE route_runs SET status = 'cancelled', completed_at = ? WHERE id = ?",
-                (datetime.now(timezone.utc).isoformat(), run_id),
+                "UPDATE route_runs SET status = 'cancelled', completed_at = ? "
+                "WHERE id = ? AND status IN ('queued','assigned','running')",
+                (now, run_id),
             )
             await self._db.commit()
             await self._ws.broadcast("route:cancelled", {"run_id": run_id})
+
+        if run_id in self._queue:
+            self._queue.remove(run_id)
+            await _mark_cancelled_if_active()
             return {"ok": True}
+
         for robot_id, active_run_id in self._active.items():
             if active_run_id == run_id:
-                # Check if offline run — cancel directly in DB
+                # Best-effort tell RouteService (online runs only), then ALWAYS
+                # write DB — RouteService.cancel_run can silently noop when its
+                # in-memory _runs map is empty after a restart (CORNER-027).
                 async with self._db.execute(
                     "SELECT execution_mode FROM route_runs WHERE id = ?", (run_id,)
                 ) as cursor:
                     row = await cursor.fetchone()
-                if row and row[0] == "offline":
-                    self._active.pop(robot_id, None)
-                    await self._db.execute(
-                        "UPDATE route_runs SET status = 'cancelled', completed_at = ? WHERE id = ?",
-                        (datetime.now(timezone.utc).isoformat(), run_id),
-                    )
-                    await self._db.commit()
-                    await self._ws.broadcast("route:cancelled", {"run_id": run_id})
-                elif self._route_service:
+                is_online = row and row[0] != "offline"
+                if is_online and self._route_service:
                     await self._route_service.cancel_run(run_id)
+
+                self._active.pop(robot_id, None)
+                await _mark_cancelled_if_active()
                 return {"ok": True}
+
         return {"ok": False, "error": "Run not found"}
 
     def get_status(self) -> dict:
@@ -220,26 +227,36 @@ class RouteDispatcher:
         }
 
     async def rebuild_from_db(self) -> None:
-        # Mark stale offline_running as completed (no way to resume after restart)
         now = datetime.now(timezone.utc).isoformat()
+
+        # Offline runs cannot resume after restart — mark completed (existing behaviour).
         cursor = await self._db.execute(
             "UPDATE route_runs SET status = 'completed', completed_at = ? "
             "WHERE status = 'offline_running'", (now,),
         )
         if cursor.rowcount:
             logger.info(f"Cleaned {cursor.rowcount} stale offline_running runs")
-            await self._db.commit()
 
+        # Online runs cannot resume either — RouteService task state lives in memory
+        # and is gone after the restart. Mark them interrupted so dispatcher.active
+        # is not silently re-populated (CORNER-013/028 fix).
+        cursor = await self._db.execute(
+            "UPDATE route_runs SET status = 'interrupted', completed_at = ? "
+            "WHERE status IN ('assigned', 'running')", (now,),
+        )
+        if cursor.rowcount:
+            logger.warning(
+                f"Marked {cursor.rowcount} interrupted online run(s) — "
+                f"server was restarted mid-route, manual robot recovery may be needed"
+            )
+
+        await self._db.commit()
+
+        # Re-load only queued runs. Active map stays empty: an interrupted run
+        # is terminal and there is nothing for the dispatcher to track.
         async with self._db.execute(
             "SELECT id FROM route_runs WHERE status = 'queued' ORDER BY started_at"
         ) as cursor:
             rows = await cursor.fetchall()
         self._queue = [row[0] for row in rows]
-        async with self._db.execute(
-            "SELECT id, robot_id FROM route_runs WHERE status IN ('assigned', 'running')"
-        ) as cursor:
-            rows = await cursor.fetchall()
-        for run_id, robot_id in rows:
-            if robot_id:
-                self._active[robot_id] = run_id
-        logger.info(f"Rebuilt dispatcher: {len(self._queue)} queued, {len(self._active)} active")
+        logger.info(f"Rebuilt dispatcher: {len(self._queue)} queued, 0 active")
