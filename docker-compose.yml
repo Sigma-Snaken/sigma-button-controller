@@ -10,7 +10,7 @@ services:
   zigbee2mqtt:
     image: koenkk/zigbee2mqtt
     ports:
-      - "8080:8080"
+      - "8501:8080"
     volumes:
       - ./zigbee2mqtt:/app/data
     devices:
@@ -24,7 +24,7 @@ services:
   app:
     build: .
     ports:
-      - "8000:8000"
+      - "8500:8000"
     volumes:
       - ./data:/app/data
     environment:
