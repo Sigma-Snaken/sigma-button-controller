@@ -107,7 +107,7 @@ Type=Link
 Name=Sigma 控制介面
 Comment=Zigbee → Kachaka Controller
 Icon=applications-internet
-URL=http://localhost:8000
+URL=http://localhost:8500
 SHORTCUT
     chmod +x "$DESKTOP_DIR/sigma-controller.desktop"
     echo "Desktop shortcut created."

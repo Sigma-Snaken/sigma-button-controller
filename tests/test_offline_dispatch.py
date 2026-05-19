@@ -88,7 +88,7 @@ async def setup(tmp_path):
     dispatcher.set_route_service(route_svc)
     dispatcher.set_offline_components(generator, deployer)
     dispatcher.set_route_mode("offline")
-    dispatcher.set_pi_url("http://localhost:8000")
+    dispatcher.set_pi_url("http://localhost:8500")
 
     yield dispatcher, generator, deployer, route_svc, ws, db
     await disconnect()
@@ -110,7 +110,7 @@ async def test_offline_dispatch_generates_and_deploys(setup):
     assert gen_call["stops"] == stops
     assert gen_call["shelf_name"] == "shelf-1"
     assert gen_call["default_timeout"] == 60
-    assert gen_call["pi_url"] == "http://localhost:8000"
+    assert gen_call["pi_url"] == "http://localhost:8500"
     assert gen_call["run_id"] == result["run_id"]
 
     # Deployer was called with robot IP and script

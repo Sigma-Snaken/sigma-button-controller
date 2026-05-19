@@ -44,7 +44,7 @@ async def system_info(request: Request):
         pass
     # Primary IP: prefer wifi, fallback to eth, then request header
     ip = wifi_ip or eth_ip or request.headers.get("host", "unknown").split(":")[0]
-    return {"host": ip, "url": f"http://{ip}:8000", "wifi_ip": wifi_ip, "eth_ip": eth_ip}
+    return {"host": ip, "url": f"http://{ip}:8500", "wifi_ip": wifi_ip, "eth_ip": eth_ip}
 
 
 @router.get("/settings/notify")

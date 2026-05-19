@@ -19,7 +19,7 @@ def _default_script(**overrides):
         ],
         shelf_name="shelf_01",
         default_timeout=60,
-        pi_url="http://192.168.1.100:8000",
+        pi_url="http://192.168.1.100:8500",
     )
     kwargs.update(overrides)
     return _make_generator().generate(**kwargs)
@@ -47,7 +47,7 @@ def test_generate_contains_imu_thresholds():
 
 def test_generate_contains_report_url():
     script = _default_script()
-    assert "http://192.168.1.100:8000" in script
+    assert "http://192.168.1.100:8500" in script
     assert "/api/routes/offline/report" in script
 
 

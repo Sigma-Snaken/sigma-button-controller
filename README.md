@@ -23,7 +23,7 @@ Zigbee 按鈕 → Kachaka 機器人控制器。透過 Web UI 配對 SONOFF SNZB-
 ```mermaid
 graph LR
     subgraph LAN["區域網路"]
-        Pi["Raspberry Pi 5<br/>:8000 Web UI"]
+        Pi["Raspberry Pi 5<br/>:8500 Web UI"]
         K1["Kachaka Robot<br/>:26400 gRPC"]
         K2["Kachaka Robot N<br/>:26400 gRPC"]
     end
@@ -41,8 +41,8 @@ graph TD
     subgraph Pi["Raspberry Pi 5"]
         subgraph Docker["Docker Compose"]
             MQTT["Mosquitto :1883"]
-            Z2M["Zigbee2MQTT :8080"]
-            subgraph App["FastAPI App :8000"]
+            Z2M["Zigbee2MQTT :8501"]
+            subgraph App["FastAPI App :8500"]
                 direction TB
                 Routers["Routers"]
                 Services["Services"]
@@ -111,7 +111,7 @@ sequenceDiagram
 
     Note over Pi: WiFi 連不上或手動觸發
     Pi->>Pi: nmcli hotspot (SIGMA-SETUP)
-    U->>Pi: 連上 AP → http://10.42.0.1:8000
+    U->>Pi: 連上 AP → http://10.42.0.1:8500
     U->>Pi: 掃描網路 → 選擇 SSID → 輸入密碼
     Pi->>Pi: nmcli connect 新網路
     Note over Pi: AP 關閉，切回 client 模式
@@ -190,8 +190,8 @@ docker compose up --build
 
 | 服務 | URL |
 |------|-----|
-| 控制介面 | `http://<IP>:8000` |
-| Zigbee2MQTT | `http://<IP>:8080` |
+| 控制介面 | `http://<IP>:8500` |
+| Zigbee2MQTT | `http://<IP>:8501` |
 
 ## 技術棧
 

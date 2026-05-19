@@ -68,7 +68,7 @@ async def setup(tmp_path):
     dispatcher = RouteDispatcher(db=db, ws_manager=ws, robot_manager=rm)
     dispatcher.set_offline_components(generator, deployer)
     dispatcher.set_route_mode("offline")
-    dispatcher.set_pi_url("http://192.168.50.6:8000")
+    dispatcher.set_pi_url("http://192.168.50.6:8500")
 
     yield dispatcher, deployer, generator, ws, db
 
@@ -96,7 +96,7 @@ async def test_offline_full_lifecycle(setup):
     assert "StationA" in script
     assert "StationB" in script
     assert "s1" in script
-    assert "192.168.50.6:8000" in script
+    assert "192.168.50.6:8500" in script
     compile(script, "<test>", "exec")  # valid Python
 
     # Verify DB state

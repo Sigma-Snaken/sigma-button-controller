@@ -56,12 +56,12 @@ def robot_id(request):
 
 @pytest.fixture(scope="session")
 def base_url(pi_host):
-    return f"http://{pi_host}:8000"
+    return f"http://{pi_host}:8500"
 
 
 @pytest.fixture(scope="session")
 def ws_url(pi_host):
-    return f"ws://{pi_host}:8000/ws"
+    return f"ws://{pi_host}:8500/ws"
 
 
 class ChaosOps:

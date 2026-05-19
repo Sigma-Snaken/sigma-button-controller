@@ -10,7 +10,7 @@ services:
   zigbee2mqtt:
     image: koenkk/zigbee2mqtt
     ports:
-      - "8080:8080"
+      - "8501:8080"
     privileged: true
     volumes:
       - ./zigbee2mqtt:/app/data
@@ -24,7 +24,7 @@ services:
   app:
     image: ghcr.io/sigma-snaken/sigma-button-controller:latest
     ports:
-      - "8000:8000"
+      - "8500:8000"
     volumes:
       - ./data:/app/data
       - ${HOME}/.ssh:/root/.ssh:ro
