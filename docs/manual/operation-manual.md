@@ -177,12 +177,24 @@ graph LR
 
 Offline 模式仰賴 Pi 與機器人之間的 SSH 通道（Port `26500`，用戶 `kachaka`）將腳本送進機器人的 Playground 容器執行。
 
+> **SSH 金鑰準備**
+>
+> Pi 端的 SSH 金鑰由 `deploy/setup.sh` 自動產生於 `~/.ssh/id_rsa`（4096-bit RSA，無 passphrase），並透過 docker-compose 唯讀掛載進 app 容器的 `/root/.ssh`。
+> 首次部署完成後不需手動執行 `ssh-keygen`；只需把對應的公鑰加入每台機器人的 `~/.ssh/authorized_keys`（見下方第 2 步）。
+
 ![路線分頁（Offline 模式）](screenshots/08-routes-offline-tab.png)
 
 1. **回報 IP**：在輸入框填入 Pi 對機器人可見的 URL（例如 `http://192.168.50.6:8000`），點擊「**儲存**」。腳本完成或回報事件時會 POST 到此 URL。
 2. **測試 SSH**：每台機器人列旁都有「**測試**」按鈕，點擊後：
    - 若顯示 `✓ OK`，表示 Pi 已可免密碼登入該機器人
-   - 若顯示 `✗ 錯誤`，下方會自動展開 SSH 公鑰，請複製貼到該機器人的 `~/.ssh/authorized_keys`
+   - 若顯示 `✗ 錯誤`，下方會自動展開 SSH 公鑰，請複製貼到該機器人 Playground 容器的 `~/.ssh/authorized_keys`：
+     ```bash
+     ssh -p 26500 kachaka@<robot-ip>
+     mkdir -p ~/.ssh && chmod 700 ~/.ssh
+     echo '<貼上公鑰>' >> ~/.ssh/authorized_keys
+     chmod 600 ~/.ssh/authorized_keys
+     ```
+     完成後再按一次「測試」應顯示 `✓ OK`。
 
 > **注意**：機器人重新開機後 Playground 容器內的腳本會中止，路線記錄會被標記為已完成（無法續跑）。建議在送出長路線前先確認電量。
 
@@ -465,6 +477,7 @@ Offline 模式仰賴 Pi 與機器人之間的 SSH 通道（Port `26500`，用戶
 |---------|----------|
 | SSH 測試 ✗ Authentication failed | 將「路線」分頁顯示的 SSH 公鑰加入機器人 Playground 容器的 `~/.ssh/authorized_keys` |
 | SSH 測試 ✗ Connection refused / timeout | 確認機器人 IP 正確、機器人已開機，以及與 Pi 在同一網段 |
+| 公鑰顯示「無法取得 SSH 公鑰」 | Pi 端尚未產生金鑰。重新執行 `deploy/setup.sh`，或手動 `ssh-keygen -t rsa -b 4096 -N "" -f ~/.ssh/id_rsa` 後重啟 app 容器：`cd /opt/app/sigma-button-controller && docker compose restart app` |
 | Process did not start after deploy | 機器人 Playground 容器被卡住；請重新啟動機器人後再試 |
 | 派遣後一直「離線執行中」 | 檢查「回報 IP」是否填寫正確（必須是 Pi 對機器人可見的 URL） |
 

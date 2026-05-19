@@ -11,6 +11,7 @@ Zigbee 按鈕 → Kachaka 機器人控制器。透過 Web UI 配對 SONOFF SNZB-
 - **Zigbee 按鈕配對** — Web UI 一鍵 permit_join，自動偵測 SNZB-01
 - **三觸發綁定** — 單擊/雙擊/長按各自綁定不同動作，參數從機器人即時載入
 - **8 種機器人動作** — 移動、回充電座、語音、搬運/歸還貨架、對接/放下、執行捷徑
+- **多停靠點路線** — Online 模式（WiFi 全程連線）+ Offline 模式（SSH 部署腳本到 Playground，適用 WiFi 死角），支援模板、Round-Robin 派遣、確認按鈕、IMU 搖晃感測
 - **機器人監控** — 即時地圖 + 位置、前/後鏡頭串流 (5 FPS)、RTT 熱力圖
 - **WiFi 設定 + AP 配網** — 搬到新環境時，手機連 AP 即可設定 WiFi
 - **執行記錄** — 完整歷史含錯誤代碼，支援分頁
@@ -135,7 +136,7 @@ curl -L https://github.com/Sigma-Snaken/sigma-button-controller/archive/refs/hea
 cd deploy
 ```
 
-**2. 首次設定 (Docker + udev + systemd)**
+**2. 首次設定 (Docker + udev + SSH key + systemd)**
 
 ```bash
 chmod +x setup.sh && ./setup.sh
@@ -143,6 +144,9 @@ chmod +x setup.sh && ./setup.sh
 
 > 首次安裝 Docker 後，腳本會自動停止並提示重新登入。
 > 請登出再登入（或 `sudo reboot`），然後再執行一次 `./setup.sh` 完成剩餘設定。
+>
+> 腳本會在 `~/.ssh/id_rsa` 自動產生 SSH 金鑰（給 Offline 模式部署離線路線用），並由 `docker-compose.yml` 唯讀掛載進 app 容器；
+> 後續需到 Web UI「路線 → Offline 模式 → 測試」取得公鑰，貼到每台機器人 Playground 容器的 `~/.ssh/authorized_keys`。詳細步驟見 `docs/manual/operation-manual.md` §4.2。
 
 **3. 啟動所有服務 (Mosquitto + Z2M + App)**
 

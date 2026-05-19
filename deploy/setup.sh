@@ -26,6 +26,14 @@ JSON
     sudo systemctl restart docker
 fi
 
+# ── SSH key for offline route deployment ──
+if [ ! -f "$HOME/.ssh/id_rsa" ]; then
+    echo "Generating SSH key for offline route deployment..."
+    mkdir -p "$HOME/.ssh"
+    chmod 700 "$HOME/.ssh"
+    ssh-keygen -t rsa -b 4096 -N "" -f "$HOME/.ssh/id_rsa" -C "sigma-button-controller@$(hostname)"
+fi
+
 # ── Zigbee dongle udev rule ──
 echo "Setting up Zigbee dongle udev rule..."
 echo 'SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="zigbee"' | sudo tee /etc/udev/rules.d/99-zigbee.rules > /dev/null
