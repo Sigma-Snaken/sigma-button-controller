@@ -188,7 +188,7 @@ class RouteDispatcher:
             # Status guard skips runs already in a terminal state.
             await self._db.execute(
                 "UPDATE route_runs SET status = 'cancelled', completed_at = ? "
-                "WHERE id = ? AND status IN ('queued','assigned','running')",
+                "WHERE id = ? AND status IN ('queued','assigned','running','offline_running')",
                 (now, run_id),
             )
             await self._db.commit()
@@ -211,6 +211,15 @@ class RouteDispatcher:
                 is_online = row and row[0] != "offline"
                 if is_online and self._route_service:
                     await self._route_service.cancel_run(run_id)
+                elif not is_online and self._deployer:
+                    robot_svc = self._rm.get(robot_id)
+                    robot_ip = getattr(robot_svc, "ip", None) or robot_id
+                    stop_result = await self._deployer.stop(robot_ip)
+                    if not stop_result.get("ok"):
+                        logger.warning(
+                            f"Offline stop SSH failed for {run_id} on {robot_id}: "
+                            f"{stop_result.get('error')}"
+                        )
 
                 self._active.pop(robot_id, None)
                 await _mark_cancelled_if_active()

@@ -63,6 +63,15 @@ class OfflineDeployer:
             await asyncio.sleep(self.PGREP_INTERVAL)
         return False
 
+    async def stop(self, robot_ip: str) -> dict:
+        """Kill any running route_executor.py on the robot. Best-effort."""
+        try:
+            async with await self._connect(robot_ip) as conn:
+                await conn.run("pkill -f route_executor.py || true")
+            return {"ok": True, "robot_ip": robot_ip}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
     async def test_connection(self, robot_ip: str) -> dict:
         """Test SSH connectivity to the robot.
 

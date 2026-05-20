@@ -265,6 +265,55 @@ async def test_cancel_active_writes_db_even_when_route_service_silent(setup):
     assert "r1" not in dispatcher._active
 
 
+class FakeOfflineDeployer:
+    def __init__(self):
+        self.stopped = []
+
+    async def stop(self, robot_ip):
+        self.stopped.append(robot_ip)
+        return {"ok": True, "robot_ip": robot_ip}
+
+
+class FakeRobotEntry:
+    def __init__(self, ip):
+        self.ip = ip
+
+
+@pytest.mark.asyncio
+async def test_cancel_offline_running_updates_db_and_stops_robot(setup):
+    """Cancelling an offline_running route must mark DB cancelled AND
+    SSH-kill the executor on the robot."""
+    dispatcher, _, ws, _, db = setup
+    import json
+    await db.execute(
+        "INSERT INTO route_runs (id, robot_id, stops, default_timeout, status, current_stop, execution_mode) "
+        "VALUES ('r-off', 'r1', ?, 60, 'offline_running', -1, 'offline')",
+        (json.dumps([{"name": "A"}]),),
+    )
+    await db.commit()
+
+    class _RM:
+        def all_ids(self): return ["r1"]
+        def get(self, rid): return FakeRobotEntry("9.9.9.9") if rid == "r1" else None
+
+    dispatcher._rm = _RM()
+    dispatcher._active = {"r1": "r-off"}
+    deployer = FakeOfflineDeployer()
+    dispatcher._deployer = deployer
+
+    result = await dispatcher.cancel("r-off")
+    assert result["ok"] is True
+
+    async with db.execute(
+        "SELECT status, completed_at FROM route_runs WHERE id = 'r-off'"
+    ) as c:
+        row = await c.fetchone()
+    assert row[0] == "cancelled"
+    assert row[1] is not None
+    assert "r1" not in dispatcher._active
+    assert deployer.stopped == ["9.9.9.9"]
+
+
 @pytest.mark.asyncio
 async def test_cancel_does_not_overwrite_terminal_status(setup):
     """A run already in a terminal state must not be overwritten by cancel."""
