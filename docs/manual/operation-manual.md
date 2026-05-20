@@ -182,6 +182,14 @@ Offline 模式仰賴 Pi 與機器人之間的 SSH 通道（Port `26500`，用戶
 > Pi 端的 SSH 金鑰由 `deploy/setup.sh` 自動產生於 `~/.ssh/id_rsa`（4096-bit RSA，無 passphrase），並透過 docker-compose 唯讀掛載進 app 容器的 `/root/.ssh`。
 > 首次部署完成後不需手動執行 `ssh-keygen`；只需把對應的公鑰加入每台機器人的 `~/.ssh/authorized_keys`（見下方第 2 步）。
 
+> **⚠️ 每台機器人都必須先安裝 `kachaka_api`**
+>
+> Offline 模式部署的 `route_executor.py` 會 `import kachaka_api`，但 Playground 容器**預設不會自帶**這個套件。
+> 請用瀏覽器打開機器人的 **Playground 網頁**（不需要 SSH），依官方 README 的 Python 安裝步驟在網頁上操作：
+> 👉 [pf-robotics/kachaka-api — Python](https://github.com/pf-robotics/kachaka-api?tab=readme-ov-file#python)
+>
+> 若未安裝，派遣後機器人不會移動；確認方法：在 Playground 網頁觀察腳本輸出，若看到 `ModuleNotFoundError: No module named 'kachaka_api'` 即為此原因。
+
 ![路線分頁（Offline 模式）](screenshots/08-routes-offline-tab.png)
 
 1. **回報 IP**：在輸入框填入 Pi 對機器人可見的 URL（例如 `http://192.168.50.6:8500`），點擊「**儲存**」。腳本完成或回報事件時會 POST 到此 URL。

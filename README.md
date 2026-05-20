@@ -148,6 +148,13 @@ chmod +x setup.sh && ./setup.sh
 > 腳本會在 `~/.ssh/id_rsa` 自動產生 SSH 金鑰（給 Offline 模式部署離線路線用），並由 `docker-compose.yml` 唯讀掛載進 app 容器；
 > 後續需到 Web UI「路線 → Offline 模式 → 測試」取得公鑰，貼到每台機器人 Playground 容器的 `~/.ssh/authorized_keys`。詳細步驟見 `docs/manual/operation-manual.md` §4.2。
 
+> **Offline 模式前置：每台機器人需先安裝 `kachaka_api`**
+>
+> Offline 模式部署的 `route_executor.py` 會 `import kachaka_api`，但 Playground 預設**不會**自帶這個套件。
+> 請用瀏覽器打開機器人的 Playground 網頁（不需要 SSH），照官方 README 的 Python 安裝步驟操作：
+> 👉 [pf-robotics/kachaka-api — Python](https://github.com/pf-robotics/kachaka-api?tab=readme-ov-file#python)
+> 若未安裝，派遣後機器人不會移動，原因是腳本啟動時即拋 `ModuleNotFoundError: No module named 'kachaka_api'`。
+
 **3. 啟動所有服務 (Mosquitto + Z2M + App)**
 
 ```bash
