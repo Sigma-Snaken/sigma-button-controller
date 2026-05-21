@@ -139,11 +139,8 @@ def main():
             print(f"[route_executor] move_shelf returned: {{result}}", flush=True)
             try_report("arrived", i)
 
-            # Announce arrival
-            client.speak("到站，請取貨")
+            # Silent arrival — settle 2s inside _arm_imu, then wait for shake
             print(f"[route_executor] Waiting for shake or timeout ({{timeout_sec}}s)", flush=True)
-
-            # Arm IMU with 2s settle delay, then wait
             _arm_imu(settle_delay=2.0)
             shook = _shake_event.wait(timeout=timeout_sec)
             _disarm_imu()
