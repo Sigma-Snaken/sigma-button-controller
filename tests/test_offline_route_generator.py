@@ -41,8 +41,9 @@ def test_generate_contains_shelf():
 
 def test_generate_contains_imu_thresholds():
     script = _default_script()
-    assert "ACCEL_THRESHOLD = 11.0" in script
-    assert "GYRO_THRESHOLD = 0.8" in script
+    assert "GZ_MIN_PEAK = 0.2" in script
+    assert "WINDOW_SAMPLES = 15" in script
+    assert "ZC_THRESHOLD = 2" in script
 
 
 def test_generate_contains_report_url():

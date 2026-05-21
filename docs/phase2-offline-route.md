@@ -388,19 +388,38 @@ Step 3: return_shelf(s1) → 回到 s1のホーム
 
 2. **雙指標互補**：第二次搖晃的加速度（10.31）未超過閾值 11.0，但陀螺儀（0.945）超過 0.8 閾值成功觸發。證明同時監測 accel 和 gyro 的設計是正確的。
 
-3. **偵測演算法**（已驗證）：
-   ```python
-   # 閾值
-   ACCEL_THRESHOLD = 11.0   # m/s²
-   GYRO_THRESHOLD = 0.8     # rad/s
+3. **偵測演算法**（2026-05-21 升級為 yaw-rate 零交叉法 — 解決推/搖誤判）：
 
-   # 判定：最近 3 個 sample 中有 2 個滿足
-   hit = accel > ACCEL_THRESHOLD or gyro > GYRO_THRESHOLD
-   if count_of_last_3(hit) >= 2:
-       shake_detected = True
+   **原本（2026-04-08 POC）**：用 accel/gyro magnitude 雙門檻 OR 邏輯。問題是「作業員到站後輕推機器人一下」也會把 gyro 推過 0.8（實測 push 可達 0.83），會誤觸發確認。
+
+   **新規則**：只看 `gz`（yaw rate）的「來回振盪」次數 — 物理上推=單向位移、搖=來回扭轉，過零次數差 14 倍以上。
+   ```python
+   # 滑動視窗 1.5 秒（10Hz IMU → 15 samples），視窗內 ≥ 2 次過零 → 搖晃
+   GZ_MIN_PEAK = 0.2        # rad/s，過零兩端至少一邊高於此值才算（濾雜訊）
+   WINDOW_SAMPLES = 15      # 1.5s @ ~10Hz IMU publish rate
+   ZC_THRESHOLD = 2
+
+   # 在滑動視窗中算「有效過零」次數
+   zc = sum(
+       1 for i in range(1, WINDOW_SAMPLES)
+       if sign(buf[i-1]) != sign(buf[i])
+       and (abs(buf[i-1]) > GZ_MIN_PEAK or abs(buf[i]) > GZ_MIN_PEAK)
+   )
+   shake_detected = (zc >= ZC_THRESHOLD)
    ```
 
-4. **Arm/Disarm 流程**：
+   **2026-05-21 實測對比**（同一輛機器人連續錄 4 段）：
+
+   | 段落 | gz 過零次數（filtered） | max 1.5s 視窗 | 舊規則 | **新規則** |
+   |---|---|---|---|---|
+   | 靜止 | 0 | 0 | skip ✓ | skip ✓ |
+   | **推 2-3 次** | 1 | **1** | **誤觸發 ✗** | **skip ✓** |
+   | 搖 1 下 | 2 | 2 | 觸發 ✓ | 觸發 ✓ |
+   | 搖 4 次 | 24 | 5 | 觸發 ✓ | 觸發 ✓ |
+
+   **硬體限制**：Kachaka 透過 gRPC 只暴露 `gz`（yaw 軸），`gx`、`gy` 全為 0；IMU publish rate 受 server throttle 在 ~10 Hz（cursor 長輪詢也拉不快）。新演算法只依賴 `gz` 一個維度，剛好對應這個限制。
+
+4. **Arm/Disarm 流程**（沿用 POC 設計）：
    ```
    移動中 → imu_armed=False（不偵測）
    到站 → speak 提示 → sleep 2s（等靜止）→ imu_armed=True

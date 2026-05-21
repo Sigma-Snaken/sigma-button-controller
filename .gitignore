@@ -14,3 +14,4 @@ zigbee2mqtt/coordinator_backup.json
 zigbee2mqtt/log/
 .playwright-mcp/
 *:Zone.Identifier
+imu_*.csv
