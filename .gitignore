@@ -1,8 +1,10 @@
 data/
+.claude/
 .superpowers/
 .sigma/
 docs/plans/
 docs/superpowers/
+docs/phase2-offline-route.md
 __pycache__/
 *.pyc
 .venv/

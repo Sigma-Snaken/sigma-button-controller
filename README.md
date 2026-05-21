@@ -10,13 +10,15 @@ Zigbee 按鈕 → Kachaka 機器人控制器。透過 Web UI 配對 SONOFF SNZB-
 - **多機器人管理** — 動態新增/移除 Kachaka，即時狀態與電量
 - **Zigbee 按鈕配對** — Web UI 一鍵 permit_join，自動偵測 SNZB-01
 - **三觸發綁定** — 單擊/雙擊/長按各自綁定不同動作，參數從機器人即時載入
-- **8 種機器人動作** — 移動、回充電座、語音、搬運/歸還貨架、對接/放下、執行捷徑
-- **多停靠點路線** — Online 模式（WiFi 全程連線）+ Offline 模式（SSH 部署腳本到 Playground，適用 WiFi 死角），支援模板、Round-Robin 派遣、確認按鈕、IMU 搖晃感測
-- **機器人監控** — 即時地圖 + 位置、前/後鏡頭串流 (5 FPS)、RTT 熱力圖
+- **11 種綁定動作** — 9 種機器人動作（移動、回充、語音、搬運/歸還/重置貨架、對接/放下、執行捷徑）+ 取消命令 + 派遣路線模板
+- **多停靠點路線** — Online 模式（WiFi 全程連線）+ Offline 模式（SSH 部署腳本到 Playground，適用 WiFi 死角，IMU yaw-rate 零交叉偵測搖晃確認），支援模板、Round-Robin 派遣、確認按鈕；server 重啟可自動 rebuild、把卡半路的 online run 標為 `interrupted`
+- **機器人監控** — 即時地圖 + 位置、前/後鏡頭串流 (5 FPS)、RTT 熱力圖、MQTT 連線狀態即時推播
 - **WiFi 設定 + AP 配網** — 搬到新環境時，手機連 AP 即可設定 WiFi
+- **命令佇列** — 按鈕觸發排隊、去重 (debounce)、可取消執行中或排隊中命令；佇列可整體停用
 - **執行記錄** — 完整歷史含錯誤代碼，支援分頁
-- **Telegram 通知** — 執行失敗自動推送
+- **Telegram 通知** — 執行失敗或路線超時自動推送
 - **RWD** — 桌面/平板/手機自適應，手機版 FAB 浮動選單
+- **Chaos test 框架** — `tests/chaos/` 對實機注入故障（停 mosquitto / PATCH IP / 重啟 app）驗證 CORNER cases
 
 ## 硬體架構
 
@@ -232,6 +234,7 @@ docker compose up --build
 |--------|----------|------|
 | GET | `/api/robots/{id}/map` | 地圖 + 位置 (pose 從 controller.state) |
 | GET | `/api/robots/{id}/camera/{front\|back}` | 鏡頭 (CameraStreamer latest_frame) |
+| GET | `/api/robots/{id}/camera/{cam}/stream` | MJPEG multipart 串流 |
 | POST | `/api/robots/{id}/camera/{cam}/start` | 啟動串流 |
 | POST | `/api/robots/{id}/camera/{cam}/stop` | 停止串流 |
 | GET | `/api/robots/{id}/metrics` | RTT 統計 |
@@ -250,6 +253,32 @@ docker compose up --build
 | GET | `/api/bindings/{button_id}` | 查詢綁定 |
 | PUT | `/api/bindings/{button_id}` | 更新綁定 |
 
+### 路線
+
+| Method | Endpoint | 說明 |
+|--------|----------|------|
+| GET | `/api/routes/templates` | 模板列表 |
+| POST | `/api/routes/templates` | 建立模板 |
+| PUT | `/api/routes/templates/{id}` | 更新模板 |
+| DELETE | `/api/routes/templates/{id}` | 刪除模板 |
+| POST | `/api/routes/dispatch` | 派遣路線（template 或 ad-hoc） |
+| POST | `/api/routes/runs/{run_id}/cancel` | 取消路線 |
+| GET | `/api/routes/runs` | 進行中的路線列表 |
+| GET | `/api/routes/runs/{run_id}` | 單一路線細節 |
+| GET | `/api/routes/history` | 已完成 / 取消 / 失敗的歷史 |
+| GET | `/api/routes/dispatcher/status` | Dispatcher round-robin 狀態 |
+| POST | `/api/routes/offline/report` | Offline 模式機器人腳本回報事件 |
+| POST | `/api/routes/offline/test-ssh` | 測試 SSH 連線到指定機器人 |
+| GET | `/api/routes/offline/public-key` | 取得 Pi 端 SSH 公鑰 |
+
+### 命令佇列
+
+| Method | Endpoint | 說明 |
+|--------|----------|------|
+| GET | `/api/queue` | 當前佇列（依機器人分組） |
+| DELETE | `/api/queue/{queue_id}` | 移除尚未執行的命令 |
+| POST | `/api/queue/cancel/{robot_id}` | 取消執行中的命令 |
+
 ### WiFi
 
 | Method | Endpoint | 說明 |
@@ -259,20 +288,26 @@ docker compose up --build
 | POST | `/api/wifi/connect` | 連線 WiFi |
 | POST | `/api/wifi/hotspot/start` | 啟動 AP |
 | POST | `/api/wifi/hotspot/stop` | 關閉 AP |
+| GET | `/api/wifi/connections` | 已儲存的連線 |
+| POST | `/api/wifi/autoconnect` | 設定自動連線 on/off |
+| POST | `/api/wifi/connection/delete` | 移除已儲存的連線 |
 
-### 系統
+### 系統 & 設定
 
 | Method | Endpoint | 說明 |
 |--------|----------|------|
-| GET | `/api/health` | 健康檢查 |
+| GET | `/api/health` | 健康檢查（含 `mqtt_connected`） |
 | GET | `/api/system/info` | 系統 URL |
-| GET | `/api/settings/notify` | Telegram 設定 |
-| PUT | `/api/settings/notify` | 更新 Telegram |
+| GET / PUT | `/api/settings/notify` | Telegram 設定 |
 | POST | `/api/settings/notify/test` | 測試通知 |
+| GET / PUT | `/api/settings/rtt-logger` | RTT logger 開關 |
+| GET / PUT | `/api/settings/queue` | 命令佇列開關 |
+| GET / PUT | `/api/settings/route-mode` | 路線模式（online/offline）|
+| GET / PUT | `/api/settings/pi-url` | Pi 對機器人可見的回報 URL（offline 模式用）|
 | GET | `/api/logs?page=N` | 執行記錄 |
-| WS | `/ws` | 即時事件 |
+| WS | `/ws` | 即時事件（pose、shelf、route、mqtt:state ...）|
 
-### 支援的動作
+### 支援的綁定動作
 
 | 動作 | 參數 | 執行方式 |
 |------|------|----------|
@@ -283,20 +318,26 @@ docker compose up --build
 | `speak` | `{text}` | KachakaCommands |
 | `dock_shelf` | — | KachakaCommands |
 | `undock_shelf` | — | KachakaCommands |
+| `reset_shelf` | `{shelf}` | KachakaCommands（清除機器人對該架子的位姿記錄）|
 | `start_shortcut` | `{shortcut_id}` | KachakaCommands |
+| `cancel_command` | — | ButtonManager 直接 dispatch 取消 |
+| `start_route` | `{template_id}` | RouteDispatcher 派遣模板（online 或 offline 依 Settings）|
 
 ## 資料庫
 
-SQLite WAL, 3 版本 migration:
+SQLite WAL, 6 版本 migration, 9 tables:
 
 | 表 | 用途 | 版本 |
 |----|------|------|
 | `robots` | 機器人 (id, name, ip, enabled) | V1 |
 | `buttons` | 按鈕 (ieee_addr, battery, last_seen) | V1 |
-| `bindings` | 綁定 (trigger, action, UNIQUE) | V1 |
+| `bindings` | 綁定 (button_id, trigger, action, params)；`UNIQUE(button_id, trigger)` | V1 |
 | `action_logs` | 執行記錄 | V1 |
 | `settings` | KV 設定 | V2 |
-| `rtt_logs` | RTT 記錄 (x, y, rtt_ms, battery) | V3 |
+| `rtt_logs` | RTT 記錄 (robot_name, serial, x, y, theta, battery, rtt_ms, recorded_at) | V3 |
+| `route_templates` | 路線模板 (stops, shelf_name, pinned_robot_id, confirm_button_id) | V4 / V5 |
+| `route_runs` | 路線執行紀錄 (status, current_stop, execution_mode) | V4 / V5 / V6 |
+| `route_stop_logs` | 每站時間軸 (arrived_at, confirmed_at, confirmed_by, timed_out) | V4 |
 
 ## 測試
 
@@ -312,25 +353,26 @@ sigma-button-controller/
 ├── src/
 │   ├── backend/
 │   │   ├── main.py                  # FastAPI + lifespan
-│   │   ├── routers/                 # 8 個路由模組
-│   │   ├── services/                # 8 個服務模組
-│   │   ├── database/                # connection + migrations
+│   │   ├── routers/                 # 10 個路由模組（含 routes/queue/ws）
+│   │   ├── services/                # 12 個服務模組（含 route_dispatcher, offline_*, command_queue ...）
+│   │   ├── database/                # connection + 6 版 migration
 │   │   └── utils/
 │   └── frontend/
-│       ├── index.html               # SPA (6 個 Tab)
-│       ├── css/style.css            # Vintage Terminal 主題 + RWD
-│       └── js/                      # 9 個 ES Modules
+│       ├── index.html               # SPA (7 個 Tab：機器人/路線/按鈕/動作設定/執行記錄/機器人監控/WiFi)
+│       ├── css/style.css            # Amber/Teal 主題 + RWD
+│       └── js/                      # 10 個 ES Modules（含 routes.js + websocket.js）
 ├── deploy/
 │   ├── docker-compose.yml           # Mosquitto + Z2M + App
 │   ├── wifi-agent.py                # WiFi 管理 (host, stdlib only)
 │   ├── sigma-wifi.service           # WiFi agent systemd service
-│   └── setup.sh                     # 首次部署腳本
+│   └── setup.sh                     # 首次部署腳本 + SSH key auto-gen
 ├── mosquitto/                       # Mosquitto 設定
 ├── zigbee2mqtt/                     # Z2M 設定
-├── tests/                           # pytest
-├── docker-compose.yml               # 開發用
+├── tests/                           # pytest（含 tests/chaos/ chaos 測試）
+├── docs/manual/                     # 操作手冊 + 截圖
+├── docker-compose.yml               # 開發用 (override 提供 src/ mount + --reload)
 ├── Dockerfile
-├── .github/workflows/build.yml      # CI: GHCR
+├── .github/workflows/build.yml      # CI: GHCR (amd64 + arm64)
 └── requirements.txt
 ```
 

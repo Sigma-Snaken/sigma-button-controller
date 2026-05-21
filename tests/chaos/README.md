@@ -53,17 +53,21 @@ minutes. Worst case: shelf left at a stop, manual return needed.
 
 ## Expected results
 
-These tests are written to **fail** on the bugs they document. A failure
-here is success — it produces an automated, reproducible record of
-CORNER-* behaviour. Use the failures to drive new iterations:
+These tests originally were written to **fail** on the bugs they document
+— a failure produces an automated, reproducible record of CORNER-*
+behaviour. Status after IT-16 / IT-17 (2026-04-30):
 
-| CORNER | Likely fail | Iteration to open |
+| CORNER | Original failure | Status |
 |---|---|---|
-| 001 | health/WS expose no MQTT state | IT-15: MQTT health surface |
-| 002 | 3 stale return_home dispatches after reconnect | IT-16: queue stale-command policy |
-| 004 | _executing only clears after 120s SDK timeout | IT-17: faster disconnect detection |
-| 013 | run row stuck `running` after restart | IT-18: route rebuild_from_db for online runs |
-| 014 | (likely passes — measures how long) | document the timing, possibly tighten |
+| 001 | health/WS expose no MQTT state | **✅ Fixed in IT-16** (MQTT health surface) — chaos 3/3 pass |
+| 002 | stale return_home dispatches after reconnect | ✅ Test passes — debounce collapses 3 presses into 1 queue item, 0 stale dispatch |
+| 004 | `_executing` only clears after 120s SDK timeout | 🟡 Inconclusive — PATCH IP doesn't sever in-flight gRPC (see ARCH-042); needs network-layer or robot power-cut to drive the bug |
+| 013 | run row stuck `running` after restart | **✅ Fixed in IT-17** (rebuild_from_db marks online runs `interrupted`) — chaos pass |
+| 014 | route fails when robot disconnects mid-route | 🟡 Inconclusive — same PATCH IP limitation as 004 |
+
+New CORNERs surfaced by this harness:
+- **CORNER-027** — `cancel_run` on zombie run silently returns ok but never updated DB → **Fixed in IT-17** (`dispatcher.cancel` always writes DB)
+- **CORNER-028** — `rebuild_from_db` resurrected `'running'` rows into `dispatcher.active` → **Fixed in IT-17**
 
 ## Adding a new chaos test
 
