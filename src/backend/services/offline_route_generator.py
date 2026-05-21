@@ -26,49 +26,54 @@ PI_URL = {pi_url!r}
 GRPC_ADDRESS = "100.94.1.1:26400"
 client = kachaka_api.KachakaApiClient(GRPC_ADDRESS)
 
-# ── IMU shake detection ────────────────────────────────────────────────────────
-ACCEL_THRESHOLD = 11.0   # m/s²
-GYRO_THRESHOLD = 0.8     # rad/s
+# ── IMU shake detection (yaw-rate zero-crossing in sliding window) ────────────
+# Distinguishes "shake" (operator wrist oscillation → many sign-reversals in gz)
+# from "push" (single-direction displacement → monotonic gz offset, no crossings).
+# Validated 2026-05-21: push gz_zc/window=1, shake1 gz_zc/window=2, shake gz_zc/window=5.
+GZ_MIN_PEAK = 0.2        # rad/s — crossing needs at least one side above this (rejects noise flips around 0)
+WINDOW_SAMPLES = 15      # ~1.5 s at the IMU's ~10 Hz publish rate
+ZC_THRESHOLD = 2         # filtered zero-crossings in window required to trigger
 
 _imu_armed = False
 _imu_lock = threading.Lock()
 _shake_event = threading.Event()
-_imu_samples = []
+_gz_buffer = []
 _imu_thread_stop = threading.Event()
 
 
 def _imu_worker():
-    """Background thread: poll IMU and trigger shake_event when armed + shake detected."""
+    """Background thread: cursor-poll IMU and trigger shake_event when armed + oscillation detected."""
+    cursor = 0
     while not _imu_thread_stop.is_set():
         try:
-            imu = client.get_ros_imu()
-            accel_mag = (imu.linear_acceleration.x ** 2
-                         + imu.linear_acceleration.y ** 2
-                         + imu.linear_acceleration.z ** 2) ** 0.5
-            gyro_mag = (imu.angular_velocity.x ** 2
-                        + imu.angular_velocity.y ** 2
-                        + imu.angular_velocity.z ** 2) ** 0.5
-            exceeded = (accel_mag > ACCEL_THRESHOLD) or (gyro_mag > GYRO_THRESHOLD)
+            req = kachaka_api.pb2.GetRequest(
+                metadata=kachaka_api.pb2.Metadata(cursor=cursor))
+            resp = client.stub.GetRosImu(req, timeout=2.0)
+            cursor = resp.metadata.cursor
+            gz = resp.imu.angular_velocity.z
 
             with _imu_lock:
-                _imu_samples.append(exceeded)
-                if len(_imu_samples) > 3:
-                    _imu_samples.pop(0)
+                _gz_buffer.append(gz)
+                if len(_gz_buffer) > WINDOW_SAMPLES:
+                    _gz_buffer.pop(0)
                 armed = _imu_armed
-                triggered = armed and (len(_imu_samples) >= 3) and (sum(_imu_samples[-3:]) >= 2)
-
-            if triggered:
-                _shake_event.set()
+                if armed and len(_gz_buffer) == WINDOW_SAMPLES:
+                    zc = 0
+                    for i in range(1, WINDOW_SAMPLES):
+                        a, b = _gz_buffer[i - 1], _gz_buffer[i]
+                        if (a >= 0) != (b >= 0) and (abs(a) > GZ_MIN_PEAK or abs(b) > GZ_MIN_PEAK):
+                            zc += 1
+                    if zc >= ZC_THRESHOLD:
+                        _shake_event.set()
         except Exception:
             pass
-        time.sleep(0.1)
 
 
 def _arm_imu(settle_delay=2.0):
     global _imu_armed
     _shake_event.clear()
     with _imu_lock:
-        _imu_samples.clear()
+        _gz_buffer.clear()
     time.sleep(settle_delay)
     with _imu_lock:
         _imu_armed = True
