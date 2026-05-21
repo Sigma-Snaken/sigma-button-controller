@@ -66,7 +66,10 @@ def _imu_worker():
                     if zc >= ZC_THRESHOLD:
                         _shake_event.set()
         except Exception:
-            pass
+            # Back off on transient gRPC errors (UNAVAILABLE, channel reset, etc.) —
+            # the cursor timeout only guards successful-but-stuck calls; immediate
+            # exceptions would otherwise spin the loop at 100% CPU.
+            time.sleep(0.1)
 
 
 def _arm_imu(settle_delay=2.0):
